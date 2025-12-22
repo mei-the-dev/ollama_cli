@@ -1,0 +1,11 @@
+
+
+
+# Added by MCPServer: farewell helper
+def farewell(name: str) -> str:
+    """Return a farewell message."""
+    return f"Goodbye, {name}!"
+
+# Demonstration call
+if __name__ == '__main__':
+    print(farewell('World'))

@@ -1,0 +1,394 @@
+Excellent choice. This is the **right abstraction layer** for where Omarchy is going.
+
+Below is a **clean, opinionated MCP v1 spec** + a **Marko-style agent schema** designed specifically for **autonomous coding agents**, CI use, and UI-driven workflows.
+
+I’ll keep this **implementation-ready**, not academic.
+
+---
+
+# Part I — MCP v1 (Minimal Capability Protocol)
+
+This replaces implicit conventions with a **strict contract**.
+
+---
+
+## 1. MCP v1 Design Goals
+
+* Deterministic tool execution
+* Explicit capability discovery
+* Agent-safe (no hidden side effects)
+* UI + CI friendly
+* Model-agnostic
+
+---
+
+## 2. MCP v1 Transport
+
+### 2.1 Base Endpoint
+
+```
+POST /mcp
+```
+
+All requests go through one endpoint.
+
+---
+
+## 3. MCP v1 Request Format
+
+```json
+{
+  "mcp": "1.0",
+  "id": "req-uuid",
+  "type": "tool.call | tool.list | resource.read | agent.event",
+  "payload": {}
+}
+```
+
+---
+
+## 4. Tool Discovery
+
+### 4.1 `tool.list`
+
+```json
+{
+  "mcp": "1.0",
+  "id": "1",
+  "type": "tool.list"
+}
+```
+
+### Response
+
+```json
+{
+  "id": "1",
+  "ok": true,
+  "tools": [
+    {
+      "name": "write_code",
+      "description": "Write or update a file",
+      "risk": "filesystem",
+      "confirm": true,
+      "schema": {
+        "filepath": "string",
+        "content": "string",
+        "mode": "overwrite|append"
+      }
+    }
+  ]
+}
+```
+
+**Why this matters**
+
+* Models stop hallucinating tools
+* UIs can auto-gate dangerous actions
+
+---
+
+## 5. Tool Invocation
+
+### 5.1 `tool.call`
+
+```json
+{
+  "mcp": "1.0",
+  "id": "call-42",
+  "type": "tool.call",
+  "payload": {
+    "name": "write_code",
+    "arguments": {
+      "filepath": "main.py",
+      "content": "print('hello')"
+    }
+  }
+}
+```
+
+---
+
+## 6. Tool Result
+
+```json
+{
+  "id": "call-42",
+  "ok": true,
+  "status": "SUCCESS",
+  "data": {
+    "lines_written": 1
+  },
+  "warnings": [],
+  "metadata": {
+    "hash": "a9f2e3"
+  }
+}
+```
+
+### Failure
+
+```json
+{
+  "id": "call-42",
+  "ok": false,
+  "status": "ERROR",
+  "error": "Permission denied"
+}
+```
+
+---
+
+## 7. Tool Risk Levels (Critical)
+
+```json
+risk ∈ [
+  "read",
+  "filesystem",
+  "execution",
+  "network",
+  "system"
+]
+```
+
+This allows:
+
+* CLI confirmation
+* CI denial
+* Sandboxing
+
+---
+
+## 8. Resource Access (Read-Only)
+
+```json
+{
+  "type": "resource.read",
+  "payload": {
+    "uri": "file://src/app.py"
+  }
+}
+```
+
+**Never mutates state.**
+
+---
+
+## 9. Agent Events (Optional but Powerful)
+
+```json
+{
+  "type": "agent.event",
+  "payload": {
+    "event": "plan.created | step.started | step.completed",
+    "data": {}
+  }
+}
+```
+
+Enables:
+
+* Live UI
+* Telemetry
+* Debugging
+
+---
+
+# Part II — Marko-Style Agent Schema (Omarchy)
+
+This is the **agent brain contract**.
+
+---
+
+## 10. Omarchy Agent Schema (`agent.marko.json`)
+
+```json
+{
+  "agent": {
+    "id": "omarchy-code-agent",
+    "version": "1.0",
+    "model": "qwen2.5-coder",
+    "persona": "senior-software-engineer",
+    "constraints": {
+      "no_hallucinated_tools": true,
+      "tool_calls_require_plan": true,
+      "max_parallel_tools": 1
+    }
+  }
+}
+```
+
+---
+
+## 11. Capability Declaration
+
+```json
+{
+  "capabilities": {
+    "tools": "dynamic",
+    "filesystem": true,
+    "shell": true,
+    "network": false,
+    "git": true
+  }
+}
+```
+
+---
+
+## 12. Memory Model
+
+```json
+{
+  "memory": {
+    "conversation": {
+      "max_turns": 20,
+      "summarize": true
+    },
+    "knowledge": {
+      "path": "~/.omarchy/knowledge",
+      "semantic": true
+    },
+    "plans": {
+      "path": "~/.omarchy/plans",
+      "track_progress": true
+    }
+  }
+}
+```
+
+---
+
+## 13. Planning Schema (MANDATORY)
+
+```json
+{
+  "plan": {
+    "goal": "Add auth middleware",
+    "steps": [
+      {
+        "id": "1",
+        "description": "Inspect current auth flow",
+        "tools": ["read_code"]
+      },
+      {
+        "id": "2",
+        "description": "Implement middleware",
+        "tools": ["write_code"]
+      },
+      {
+        "id": "3",
+        "description": "Run tests",
+        "tools": ["execute_code"]
+      }
+    ]
+  }
+}
+```
+
+**Agent must not execute tools without a plan.**
+
+---
+
+## 14. Tool Invocation Contract (Marko Rule)
+
+```json
+{
+  "tool_call": {
+    "tool": "write_code",
+    "arguments": {},
+    "justification": "Step 2 of plan"
+  }
+}
+```
+
+If justification is missing → **reject**.
+
+---
+
+## 15. Approval Policy
+
+```json
+{
+  "approval": {
+    "filesystem": "confirm",
+    "execution": "confirm",
+    "read": "auto",
+    "network": "deny"
+  }
+}
+```
+
+Mapped directly to CLI behavior.
+
+---
+
+## 16. Self-Critique Loop
+
+```json
+{
+  "post_execution": {
+    "verify": true,
+    "retry_limit": 1,
+    "failure_strategy": "explain"
+  }
+}
+```
+
+---
+
+## 17. Agent Output Contract
+
+```json
+{
+  "result": {
+    "status": "success|partial|failed",
+    "summary": "What was done",
+    "files_changed": [],
+    "next_steps": []
+  }
+}
+```
+
+Perfect for UI + CI.
+
+---
+
+# Part III — How This Maps to Your Code
+
+### Your MCP server becomes:
+
+* `tool.list` provider
+* `tool.call` executor
+* `resource.read` handler
+
+### Your CLI becomes:
+
+* Agent runner
+* Approval gate
+* UI renderer
+
+### Your model becomes:
+
+* Stateless reasoning engine
+* Fully constrained by Marko schema
+
+---
+
+# Part IV — Migration Plan (Short)
+
+1. Add MCP v1 request/response wrapper
+2. Implement `tool.list`
+3. Enforce plan-before-tool rule
+4. Add approval policy
+5. Log everything as Marko events
+
+---
+
+# Part V — What You’ve Built (Perspective)
+
+You are no longer building “a CLI for an LLM”.
+
+You are building:
+
+> **A deterministic, inspectable, replayable autonomous software engineer**

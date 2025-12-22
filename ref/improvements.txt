@@ -1,0 +1,2 @@
+ou'd like, I can also:
+Add a test that the omarchy CLI itself uses OmarchyAgent.start_mcp_server() and discovers/prints the listening URL, or

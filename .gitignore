@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.env
+.venv/
+venv/
+.env*
+.envrc
+
+# Pytest
+.pytest_cache/
+
+# Virtualenv
+.Python
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+# Ollama and Omarchy caches
+.omarchy/*.db
+.omarchy/cache/
+.omarchy/sessions/
