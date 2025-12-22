@@ -1075,6 +1075,28 @@ class SingularityCLI:
                 proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
                 console.print(f"[green]Dashboard launched in tmux session '{session_name}', window '{window_name}' (pid: {proc.pid}). Attach with: tmux attach -t {session_name}[/green]")
 
+                # If a graphical display is available, try to auto-open a terminal emulator attached to the tmux session
+                try:
+                    if 'DISPLAY' in os.environ:
+                        preferred = os.environ.get('SINGULARITY_PREFERRED_TERMINAL')
+                        term_path = shutil.which(preferred) if preferred else None
+                        if not term_path:
+                            for term_candidate in ('alacritty', 'kitty', 'gnome-terminal', 'x-terminal-emulator', 'xterm'):
+                                term_path = shutil.which(term_candidate)
+                                if term_path:
+                                    break
+                        if term_path:
+                            # Attempt to launch terminal emulator and run tmux attach -t <session>
+                            attach_cmd = [term_path, '-e', 'tmux', 'attach', '-t', session_name]
+                            try:
+                                term_proc = await asyncio.create_subprocess_exec(*attach_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                                console.print(f"[green]Launched terminal {term_path} to attach to tmux session {session_name} (pid: {term_proc.pid})[/green]")
+                            except Exception:
+                                # Non-fatal if terminal cannot be launched
+                                pass
+                except Exception:
+                    pass
+
         else:
             # Start a background process logging to file
             cmd = [python_exec, dashboard_path]
