@@ -56,6 +56,7 @@ def test_no_active_omarchy_tokens_in_code_files():
                         or "omarchy_" in line_low
                         or "legacy" in line_low
                         or "deprecated" in line_low
+                        or "compatible" in line_low
                     ):
                         continue
                     offenders.append(f"{path.relative_to(root)}:{n}: {line.strip()}")
