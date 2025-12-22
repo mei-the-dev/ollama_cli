@@ -1,4 +1,4 @@
-# Omarchy Command Center (Dashboard)
+# Singularity Command Center (Dashboard)
 
 A modern TUI dashboard that monitors the Ollama model and the MCP server, inspects available tools, and provides an inference testing console.
 
@@ -11,8 +11,8 @@ Features
 Quick start
 1. Install optional TUI dependencies: `pip install textual aiohttp psutil`
 2. Start Ollama: `ollama serve` (optional — the launcher can start it for you)
-3. Start the MCP server: `python3 ~/.omarchy/mcp_server.py` (or from this repo)
-4. Run the dashboard: `python3 ref/omarchy_dashboard.py` (or copy to `~/.omarchy/` and run there)
+3. Start the MCP server: `python3 ~/.singularity/mcp_server.py` (or from this repo)
+4. Run the dashboard: `python3 ref/singularity_dashboard.py` (or copy to `~/.singularity/` and run there)
 
 Launcher (recommended)
 
@@ -34,6 +34,6 @@ Notes and configuration
 
 Tips
 - If the MCP server is not reachable, the dashboard will show the MCP status as OFFLINE and not attempt tool inspection until it reconnects.
-- To run the dashboard from anywhere, copy the file to `~/.omarchy/omarchy_dashboard.py` and make it executable.
+- To run the dashboard from anywhere, copy the file to `~/.singularity/singularity_dashboard.py` and make it executable.
 
 Enjoy! ✨
