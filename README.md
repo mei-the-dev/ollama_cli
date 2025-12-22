@@ -14,3 +14,7 @@ Quick start
 
 Documentation
 See `docs/USER_GUIDE.md` for full usage, configuration, and security guidance.
+
+Dashboard
+- A lightweight TUI dashboard is available at `ref/omarchy_dashboard.py` (or copy to `~/.omarchy/omarchy_dashboard.py`). See `docs/DASHBOARD.md` for usage and quick start tips.
+- Use the launcher script `./scripts/launch_with_dashboard.sh` to start Ollama (optional), the MCP server, the CLI and the dashboard together (uses `tmux` when available).

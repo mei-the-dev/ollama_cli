@@ -438,6 +438,7 @@ class OmarchyCLI:
             ("/load", "Load previous session"),
             ("/exec <cmd>", "Execute shell command"),
             ("/git <operation>", "Perform git operation"),
+            ("/dashboard", "Launch the dashboard (opens a tmux window or background process)"),
             ("/help", "Show this help"),
             ("/exit", "Exit Omarchy")
         ]
@@ -577,6 +578,12 @@ class OmarchyCLI:
                             console.print("[yellow]No active plan[/yellow]")
                     elif cmd == "/exec":
                         await self.execute_command(args)
+                    elif cmd == "/dashboard":
+                        # Launch dashboard in a separate process or tmux window
+                        try:
+                            await self.start_dashboard()
+                        except Exception as e:
+                            console.print(f"[red]Failed to start dashboard: {e}[/red]")
                     else:
                         console.print(f"[red]Unknown command: {cmd}[/red]")
                     
@@ -622,12 +629,65 @@ class OmarchyCLI:
                     text=True,
                     timeout=30
                 )
-                
                 if result.stdout:
                     console.print(Panel(result.stdout, title="Output", border_style="green"))
                 if result.stderr:
                     console.print(Panel(result.stderr, title="Errors", border_style="red"))
-                    
+            except Exception as e:
+                console.print(f"[red]Error executing command: {e}[/red]")
+
+    async def start_dashboard(self):
+        """Start the dashboard UI.
+
+        - If `tmux` is available, spawn a new tmux window named `dashboard-<ts>` and run the dashboard there.
+        - Otherwise, start the dashboard as a background Python process and write logs to ./logs/dashboard.log
+        """
+        import shutil
+        import time
+        dashboard_path = os.path.join(os.path.dirname(__file__), 'ref', 'omarchy_dashboard.py')
+
+        # Ensure log dir exists
+        log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        dashboard_log = os.path.join(log_dir, 'dashboard.log')
+
+        tmux_path = shutil.which('tmux')
+        if tmux_path:
+            # Always create a fresh window with a unique name to avoid collisions
+            window_name = f"dashboard-{int(time.time())}"
+            cmd = [tmux_path, 'new-window', '-n', window_name, 'python3', dashboard_path]
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            console.print(f"[green]Dashboard launched in new tmux window '{window_name}' (pid: {proc.pid}).[/green]")
+        else:
+            # Start background process and detach
+            proc = await asyncio.create_subprocess_exec(
+                'python3', dashboard_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            console.print(f"[green]Dashboard started (background pid: {proc.pid}). Logs: {dashboard_log}[/green]")
+            # Discard output but also write a small starter log
+            try:
+                with open(dashboard_log, 'ab') as f:
+                    f.write(f"Started dashboard pid={proc.pid} at {datetime.utcnow().isoformat()}\n".encode('utf-8'))
+            except Exception:
+                pass
+
+    async def execute_command(self, cmd: str):
+        """Execute shell command with animation"""
+        with console.status(f"[cyan]Executing: {cmd}[/cyan]", spinner="dots"):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.stdout:
+                    console.print(Panel(result.stdout, title="Output", border_style="green"))
+                if result.stderr:
+                    console.print(Panel(result.stderr, title="Errors", border_style="red"))
             except Exception as e:
                 console.print(f"[red]Error executing command: {e}[/red]")
 
@@ -654,6 +714,34 @@ async def main():
         await cli.agent.start_mcp_server()
     except Exception:
         console.print("[yellow]Warning: could not start MCP server automatically.[/yellow]")
+
+    # If this invocation only wants to check startup, report the MCP URL and exit (used in tests)
+    if args.startup_check_only:
+        # Wait up to startup_wait (or 5s default) for the agent to discover the MCP URL
+        wait_for = args.startup_wait if (args.startup_wait and args.startup_wait > 0) else 5
+        url = getattr(cli.agent, 'mcp_server_url', None)
+        start_t = time.time()
+        while not url and (time.time() - start_t) < wait_for:
+            await asyncio.sleep(0.05)
+            url = getattr(cli.agent, 'mcp_server_url', None)
+
+        if url:
+            # Use plain print to ensure the message goes to stdout (tests read stdout)
+            print(f"Startup check: MCP server at {url}", flush=True)
+        else:
+            print("Startup check: MCP server started but did not report URL", flush=True)
+
+        if args.startup_wait and args.startup_wait > 0:
+            console.print(f"[cyan]Waiting for {args.startup_wait}s before shutdown...[/cyan]")
+            try:
+                await asyncio.sleep(args.startup_wait)
+            except Exception:
+                pass
+        try:
+            await cli.agent.stop_mcp_server()
+        except Exception:
+            pass
+        return
 
     # Interactive startup configuration (knowledge transfer, auto-apply, sudo)
     if not args.no_startup_config:
