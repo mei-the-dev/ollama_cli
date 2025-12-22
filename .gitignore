@@ -29,3 +29,7 @@ venv/
 .omarchy/*.db
 .omarchy/cache/
 .omarchy/sessions/
+
+# Local runtime logs
+logs/
+logs/*.log
