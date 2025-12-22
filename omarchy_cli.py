@@ -14,6 +14,8 @@ from typing import Optional, List, Dict
 import subprocess
 import shutil
 import argparse
+from datetime import datetime
+import logging
 
 try:
     from rich.console import Console
@@ -42,6 +44,20 @@ except ImportError:
 
 console = Console()
 import getpass
+
+# Setup a simple file logger for non-interactive/plain logs
+logger = logging.getLogger('omarchy')
+if not logger.handlers:
+    try:
+        log_dir = Path(__file__).parent / 'logs'
+        log_dir.mkdir(parents=True, exist_ok=True)
+        fh = logging.FileHandler(log_dir / 'omarchy.log')
+        fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+        logger.addHandler(fh)
+        logger.setLevel(logging.INFO)
+    except Exception:
+        pass
+
 
 # ASCII Art Banner
 BANNER = """
@@ -113,8 +129,10 @@ class OmarchyAgent:
             self.mcp_process = process
             if port:
                 console.print(f"[green]MCP server running at {self.mcp_server_url}[/green]")
+                logger.info('MCP server running at %s', self.mcp_server_url)
             else:
                 console.print("[yellow]MCP server started but did not report port within timeout[/yellow]")
+                logger.warning('MCP server started but did not report port within timeout')
             return process
         except Exception as e:
             console.print(f"[red]Failed to start MCP server: {e}[/red]")
@@ -276,6 +294,7 @@ class OmarchyAgent:
         """Handle MCP tool calls (tool_calls is a list of dicts or single dict)"""
         if isinstance(tool_calls, dict):
             tool_calls = [tool_calls]
+
         for tool_call in tool_calls:
             # support both streaming tool format and simple JSON {"tool":..., "args":...}
             tool_name = None
@@ -289,17 +308,20 @@ class OmarchyAgent:
 
             console.print(f"  [yellow]→[/yellow] Executing: [bold]{tool_name}[/bold]")
 
-            # If write_code, optionally confirm with user unless auto_apply is enabled
-            if tool_name == 'write_code':
-                auto_apply = bool(os.environ.get('OMARCHY_AUTO_APPLY')) or getattr(self, 'auto_apply', False)
-                if not auto_apply:
+            # If write_code, optionally confirm with user unless auto_apply is enabled or non-interactive
+            auto_apply = bool(os.environ.get('OMARCHY_AUTO_APPLY')) or getattr(self, 'auto_apply', False)
+            interactive = sys.stdin.isatty()
+            if tool_name == 'write_code' and not auto_apply:
+                if interactive:
                     try:
                         confirm = Confirm.ask(f"Apply write to {tool_args.get('filepath')}? (y/n)")
                     except Exception:
                         confirm = False
-                    if not confirm:
-                        console.print(f"[yellow]Skipped writing {tool_args.get('filepath')}[/yellow]")
-                        continue
+                else:
+                    confirm = False
+                if not confirm:
+                    console.print(f"[yellow]Skipped writing {tool_args.get('filepath')}[/yellow]")
+                    continue
 
             # If execute_code and sudo requested, attach sudo_password if available
             if tool_name == 'execute_code' and tool_args.get('sudo'):
@@ -317,52 +339,7 @@ class OmarchyAgent:
                         res = await resp.json()
                         console.print(f"  [green]{COMPLETE_SYMBOL}[/green] {tool_name} completed: {res.get('status', res)}")
             except Exception as e:
-                console.print(f"  [red]Tool {tool_name} failed: {e}[/red]")
-        """Handle MCP tool calls (tool_calls is a list of dicts or single dict)"""
-        if isinstance(tool_calls, dict):
-            tool_calls = [tool_calls]
-        for tool_call in tool_calls:
-            # support both streaming tool format and simple JSON {"tool":..., "args":...}
-            tool_name = None
-            tool_args = {}
-            if 'function' in tool_call:
-                tool_name = tool_call.get("function", {}).get("name")
-                tool_args = tool_call.get("function", {}).get("arguments", {})
-            else:
-                tool_name = tool_call.get('tool') or tool_call.get('name')
-                tool_args = tool_call.get('args') or tool_call.get('arguments') or {}
-
-            console.print(f"  [yellow]→[/yellow] Executing: [bold]{tool_name}[/bold]")
-
-            # If write_code, optionally confirm with user unless auto_apply is enabled
-            if tool_name == 'write_code':
-                auto_apply = bool(os.environ.get('OMARCHY_AUTO_APPLY')) or getattr(self, 'auto_apply', False)
-                if not auto_apply:
-                    try:
-                        confirm = Confirm.ask(f"Apply write to {tool_args.get('filepath')}? (y/n)")
-                    except Exception:
-                        confirm = False
-                    if not confirm:
-                        console.print(f"[yellow]Skipped writing {tool_args.get('filepath')}[/yellow]")
-                        continue
-
-            # If execute_code and sudo requested, attach sudo_password if available
-            if tool_name == 'execute_code' and tool_args.get('sudo'):
-                if self.sudo_password:
-                    tool_args['sudo_password'] = self.sudo_password
-
-            # Execute tool via MCP server HTTP API
-            try:
-                if not hasattr(self, 'mcp_server_url') or not self.mcp_server_url:
-                    console.print(f"[red]MCP server URL not known; cannot execute tool {tool_name}[/red]")
-                    continue
-                async with aiohttp.ClientSession() as session:
-                    payload = {"name": tool_name, "arguments": tool_args}
-                    async with session.post(self.mcp_server_url + '/call', json=payload) as resp:
-                        res = await resp.json()
-                        console.print(f"  [green]{COMPLETE_SYMBOL}[/green] {tool_name} completed: {res.get('status', res)}")
-            except Exception as e:
-                console.print(f"  [red]Tool {tool_name} failed: {e}[/red]")
+                console.print(f"  [red]Tool {tool_name} failed: {e!r}[/red]")
 
     
     def display_plan(self, plan: Dict):
@@ -463,6 +440,12 @@ class OmarchyCLI:
 
     async def startup_config_prompt(self):
         """Interactive prompts at startup to transfer knowledge/context and optionally enable auto-apply and sudo."""
+        # Skip prompts if not attached to a TTY (non-interactive environment)
+        # Allow tests (pytest) to run prompts even when not a TTY by checking test env.
+        if not sys.stdin.isatty() and not os.environ.get('PYTEST_CURRENT_TEST'):
+            console.print("[yellow]Non-interactive environment detected; skipping startup prompts.[/yellow]")
+            return
+
         # Transfer knowledge
         try:
             if Confirm.ask("Transfer local knowledge to the model's system prompt (recommended)?"):
@@ -621,22 +604,32 @@ class OmarchyCLI:
         await self.agent.execute_with_animation(full_prompt, f"Processing in {mode} mode", system=tool_prompt)
     
     async def execute_command(self, cmd: str):
-        """Execute shell command with animation"""
+        """Execute shell command asynchronously with animation and logging"""
         with console.status(f"[cyan]Executing: {cmd}[/cyan]", spinner="dots"):
             try:
-                result = subprocess.run(
+                proc = await asyncio.create_subprocess_shell(
                     cmd,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
                 )
-                if result.stdout:
-                    console.print(Panel(result.stdout, title="Output", border_style="green"))
-                if result.stderr:
-                    console.print(Panel(result.stderr, title="Errors", border_style="red"))
+                try:
+                    out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=30)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    console.print(f"[red]Error: command timed out after 30s[/red]")
+                    logger.warning('execute_command timeout: %s', cmd)
+                    return
+                out = out_bytes.decode(errors='replace') if out_bytes else ''
+                err = err_bytes.decode(errors='replace') if err_bytes else ''
+                if out:
+                    console.print(Panel(out, title="Output", border_style="green"))
+                if err:
+                    console.print(Panel(err, title="Errors", border_style="red"))
+                logger.info('execute_command finished: %s (rc=%s)', cmd, proc.returncode)
             except Exception as e:
-                console.print(f"[red]Error executing command: {e}[/red]")
+                logger.exception('execute_command error')
+                console.print(f"[red]Error executing command: {e!r}[/red]")
 
     async def start_dashboard(self):
         """Start the dashboard UI.
@@ -671,27 +664,8 @@ class OmarchyCLI:
             # Discard output but also write a small starter log
             try:
                 with open(dashboard_log, 'ab') as f:
-                    f.write(f"Started dashboard pid={proc.pid} at {datetime.utcnow().isoformat()}\n".encode('utf-8'))
-            except Exception:
-                pass
+                    f.write(f"Started dashboard pid={proc.pid} at {datetime.now().isoformat()}\n".encode('utf-8'))
 
-    async def execute_command(self, cmd: str):
-        """Execute shell command with animation"""
-        with console.status(f"[cyan]Executing: {cmd}[/cyan]", spinner="dots"):
-            try:
-                result = subprocess.run(
-                    cmd,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                if result.stdout:
-                    console.print(Panel(result.stdout, title="Output", border_style="green"))
-                if result.stderr:
-                    console.print(Panel(result.stderr, title="Errors", border_style="red"))
-            except Exception as e:
-                console.print(f"[red]Error executing command: {e}[/red]")
 
 
 async def main():
