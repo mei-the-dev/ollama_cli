@@ -180,9 +180,16 @@ class OmarchyDashboard(App):
         m3 = MCPMetrics()
         m4 = LLMTelemetry()
         m5 = LogTail()
+        from ref.dashboard.request_rate import RequestRate
+        from ref.dashboard.latency_graph import LatencyGraph
+        from ref.dashboard.gpu_widget import GPUMetrics
+
+        m6 = RequestRate()
+        m7 = LatencyGraph()
+        m8 = GPUMetrics()
 
         # mount modules (they will attach their widgets into the kpi-grid/main area)
-        for m in (m1, m2, m3, m4, m5):
+        for m in (m1, m2, m3, m4, m6, m7, m8, m5):
             try:
                 m.mount(self)
             except Exception:
