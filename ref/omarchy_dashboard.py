@@ -145,11 +145,10 @@ class OmarchyDashboard(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
+        # KPI grid — modules will mount their widgets here
         with Grid(classes="kpi-grid"):
-            yield ServiceStatus("Ollama API", 11434, id="stat-ollama", classes="card")
-            yield ServiceStatus("MCP Server", 8080, id="stat-mcp", classes="card")
-            yield ResourceGraph("Ollama CPU", "ollama", classes="card")
-            yield ResourceGraph("MCP (Python) CPU", "python", classes="card")
+            yield Static("Module area", classes="card")
+
 
         with Container(classes="main-content"):
             yield Label("  Server Log Tail (MCP)", classes="section-title")
@@ -168,15 +167,58 @@ class OmarchyDashboard(App):
         yield Footer()
 
     def on_mount(self):
-        self.set_interval(2.0, self.monitor_services)
+        # Initialize modules
+        from ref.dashboard.mcp_monitor import MCPMonitor
+        from ref.dashboard.llm_monitor import LLMMonitor
+        from ref.dashboard.mcp_metrics import MCPMetrics
+        from ref.dashboard.llm_telemetry import LLMTelemetry
+        from ref.dashboard.log_tail import LogTail
+
+        self.modules = []
+        m1 = MCPMonitor()
+        m2 = LLMMonitor()
+        m3 = MCPMetrics()
+        m4 = LLMTelemetry()
+        m5 = LogTail()
+
+        # mount modules (they will attach their widgets into the kpi-grid/main area)
+        for m in (m1, m2, m3, m4, m5):
+            try:
+                m.mount(self)
+            except Exception:
+                # If mount deferred because UI isn't active, still track the module
+                pass
+            self.modules.append(m)
+
+        # Start their periodic tasks (start will be safe if UI isn't yet active)
+        for m in self.modules:
+            self.call_later(lambda m=m: self.start_module(m))
+
+        # Keep existing logging and tool check schedule
         self.set_interval(1.0, self.monitor_resources)
-        self.log_msg("Dashboard initialized.")
-        # schedule initial tool check
+        self.log_msg("Dashboard initialized with modules.")
         self.call_later(self.check_tools)
+
+    def start_module(self, module):
+        # Start is async; schedule it
+        try:
+            self.call_later(lambda: self.run_module_start(module))
+        except Exception:
+            pass
+
+    async def run_module_start(self, module):
+        try:
+            await module.start()
+        except Exception:
+            pass
 
     def log_msg(self, msg):
         timestamp = datetime.now().strftime("%H:%M:%S")
-        self.query_one("#sys-log").write(f"[{timestamp}] {msg}")
+        try:
+            self.query_one("#sys-log").write(f"[{timestamp}] {msg}")
+        except Exception:
+            # If the UI screen isn't active (tests), fall back to printing
+            print(f"[{timestamp}] {msg}")
 
     @work(exclusive=True)
     async def monitor_services(self):

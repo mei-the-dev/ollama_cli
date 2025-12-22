@@ -692,16 +692,22 @@ class OmarchyCLI:
         python_exec = sys.executable
 
         if tmux_path:
-            # If we're already inside tmux, create a new window in the current session so the user sees it.
-            if 'TMUX' in os.environ:
-                cmd = [tmux_path, 'new-window', '-n', window_name, python_exec, dashboard_path]
-                proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-                console.print(f"[green]Dashboard launched in new tmux window '{window_name}' (pid: {proc.pid}).[/green]")
-            else:
-                # Create a named detached session 'omarchy' (or add a window to it if it exists)
-                session_name = 'omarchy'
-                # Start a detached session with the dashboard in a named window
-                cmd = [tmux_path, 'new-session', '-d', '-s', session_name, '-n', window_name, python_exec, dashboard_path]
+# Prepare MCP server URL to pass into the dashboard
+                mcp_url = getattr(self.agent, 'mcp_server_url', None) or os.environ.get('OMARCHY_MCP_SERVER_URL') or 'http://127.0.0.1:8000'
+
+                # If we're already inside tmux, create a new window in the current session so the user sees it.
+                if 'TMUX' in os.environ:
+                    # set env var inline via bash -lc so the dashboard process sees it inside tmux
+                    shell_cmd = f"OMARCHY_MCP_SERVER_URL='{mcp_url}' exec {python_exec} {dashboard_path}"
+                    cmd = [tmux_path, 'new-window', '-n', window_name, 'bash', '-lc', shell_cmd]
+                    proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    console.print(f"[green]Dashboard launched in new tmux window '{window_name}' (pid: {proc.pid}).[/green]")
+                else:
+                    # Create a named detached session 'omarchy' (or add a window to it if it exists)
+                    session_name = 'omarchy'
+                    # Start a detached session with the dashboard in a named window, set env inline
+                    shell_cmd = f"OMARCHY_MCP_SERVER_URL='{mcp_url}' exec {python_exec} {dashboard_path}"
+                    cmd = [tmux_path, 'new-session', '-d', '-s', session_name, '-n', window_name, 'bash', '-lc', shell_cmd]
                 proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
                 console.print(f"[green]Dashboard launched in tmux session '{session_name}', window '{window_name}' (pid: {proc.pid}). Attach with: tmux attach -t {session_name}[/green]")
 
@@ -734,10 +740,14 @@ class OmarchyCLI:
                     console.print('[dim]No graphical display detected; not opening a terminal emulator automatically.[/dim]')
         else:
             # Start background process and detach using the same Python interpreter as the CLI
+            mcp_url = getattr(self.agent, 'mcp_server_url', None) or os.environ.get('OMARCHY_MCP_SERVER_URL') or 'http://127.0.0.1:8000'
+            env = dict(os.environ)
+            env['OMARCHY_MCP_SERVER_URL'] = mcp_url
             proc = await asyncio.create_subprocess_exec(
                 python_exec, dashboard_path,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                env=env
             )
             console.print(f"[green]Dashboard started (background pid: {proc.pid}). Logs: {dashboard_log}[/green]")
             # Discard output but also write a small starter log
