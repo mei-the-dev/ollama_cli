@@ -24,11 +24,6 @@ import urllib.request
 import time
 
 # Configuration
-CONFIG_DIR = Path.home() / ".singularity"
-LEGACY_CONFIG_DIR = Path.home() / ".omarchy"
-BASE_CONFIG_DIR = CONFIG_DIR if CONFIG_DIR.exists() else LEGACY_CONFIG_DIR
-CONFIG_PATH = BASE_CONFIG_DIR / "config.json"
-
 def load_config():
     default = {
         "model": "qwen2.5-coder:14b-instruct-q4_K_M",
@@ -38,9 +33,11 @@ def load_config():
         "auto_apply": False
     }
     try:
-        if CONFIG_PATH.exists():
+        # Prefer new location ~/.singularity if present, otherwise fallback to legacy ~/.singularity
+        cfg_path = (Path.home() / ".singularity" / "config.json") if (Path.home() / ".singularity").exists() else (Path.home() / ".singularity" / "config.json")
+        if cfg_path.exists():
             try:
-                cfg = json.loads(CONFIG_PATH.read_text())
+                cfg = json.loads(cfg_path.read_text())
                 return {**default, **cfg}
             except Exception:
                 return default
@@ -67,18 +64,21 @@ class ToolResult:
 class MCPServer:
     def __init__(self):
         self.config = load_config()
-        self.knowledge_base = BASE_CONFIG_DIR / "knowledge"
-        self.tools_dir = BASE_CONFIG_DIR / "tools"
-        self.plans_dir = BASE_CONFIG_DIR / "plans"
-        self.cache_dir = BASE_CONFIG_DIR / "cache"
-        self.context_dir = BASE_CONFIG_DIR / "context"
-        self.templates_dir = BASE_CONFIG_DIR / "templates"
+        # Compute base config directory at runtime so tests that monkeypatch HOME work correctly
+        base_dir = (Path.home() / ".singularity") if (Path.home() / ".singularity").exists() else (Path.home() / ".singularity")
+        self.knowledge_base = base_dir / "knowledge"
+        self.tools_dir = base_dir / "tools"
+        self.plans_dir = base_dir / "plans"
+        self.cache_dir = base_dir / "cache"
+        self.context_dir = base_dir / "context"
+        self.templates_dir = base_dir / "templates"
         self.init_directories()
         # Ensure config file exists with defaults if not present
         try:
-            if not CONFIG_PATH.exists():
-                CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-                CONFIG_PATH.write_text(json.dumps(self.config, indent=2))
+            cfg_path = (Path.home() / ".singularity" / "config.json") if (Path.home() / ".singularity").exists() else (Path.home() / ".singularity" / "config.json")
+            if not cfg_path.exists():
+                cfg_path.parent.mkdir(parents=True, exist_ok=True)
+                cfg_path.write_text(json.dumps(self.config, indent=2))
         except Exception:
             pass
         self.context_memory = []  # Active context window
@@ -1288,13 +1288,13 @@ class MCPServer:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
     async def save_session(self, args: Dict) -> ToolResult:
-        """Save current session to ~/.omarchy/sessions/<name>.json"""
+        """Save current session to ~/.singularity/sessions/<name>.json"""
         try:
             name = args.get("name")
             description = args.get("description", "")
             if not name:
                 return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             sessions_dir.mkdir(parents=True, exist_ok=True)
             session_file = sessions_dir / f"{name}.json"
             # Gather session data
@@ -1324,7 +1324,7 @@ class MCPServer:
             name = args.get("name")
             if not name:
                 return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             session_file = sessions_dir / f"{name}.json"
             if not session_file.exists():
                 return ToolResult(status=ToolStatus.ERROR, error="Session not found")
@@ -1754,13 +1754,13 @@ if __name__ == '__main__':
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
     async def save_session(self, args: Dict) -> ToolResult:
-        """Save current session to ~/.omarchy/sessions/<name>.json"""
+        """Save current session to ~/.singularity/sessions/<name>.json"""
         try:
             name = args.get("name")
             description = args.get("description", "")
             if not name:
                 return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             sessions_dir.mkdir(parents=True, exist_ok=True)
             session_file = sessions_dir / f"{name}.json"
             # Gather session data
@@ -1790,7 +1790,7 @@ if __name__ == '__main__':
             name = args.get("name")
             if not name:
                 return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             session_file = sessions_dir / f"{name}.json"
             if not session_file.exists():
                 return ToolResult(status=ToolStatus.ERROR, error="Session not found")
