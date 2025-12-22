@@ -1,8 +1,8 @@
-# 🚀 Omarchy - AI Code Agent
+# 🚀 Singularity — AI Code Agent (formerly Omarchy)
 
 **A powerful, beautiful CLI code agent powered by Ollama's Qwen2.5-Coder with MCP tools**
 
-Omarchy brings the power of GitHub Copilot CLI to your local machine, with enhanced capabilities for planning, learning, and self-improvement - all running completely offline with your own Ollama instance.
+Singularity brings the power of a local AI coding assistant to your machine, with enhanced capabilities for planning, learning, and self-improvement — all running completely offline with your own Ollama instance. This document was migrated from the legacy Omarchy project and retains historical references where helpful.
 
 ```
    ██████  ███    ███  █████  ██████   ██████ ██   ██ ██    ██ 
@@ -52,7 +52,7 @@ The agent has access to 15+ powerful tools:
 14. **And more...**
 
 ### 🔄 Self-Improvement
-Omarchy can expand its own capabilities:
+Singularity can expand its own capabilities (Omarchy compatibility supported):
 - Add new tools dynamically
 - Learn from interactions
 - Improve over time
@@ -64,11 +64,11 @@ Omarchy can expand its own capabilities:
 
 ```bash
 # Download and run the installer
-curl -fsSL https://raw.githubusercontent.com/your-repo/omarchy/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/your-repo/singularity/main/install.sh | bash  # legacy: https://github.com/your-repo/omarchy
 
 # Or manual installation:
-git clone https://github.com/your-repo/omarchy.git
-cd omarchy
+git clone https://github.com/your-repo/singularity.git
+cd singularity
 chmod +x install.sh
 ./install.sh
 ```
@@ -81,9 +81,9 @@ chmod +x install.sh
 
 ### What Gets Installed
 ```
-~/.omarchy/
+~/.singularity/  (legacy: ~/.omarchy/)
 ├── mcp_server.py       # MCP tool server
-├── omarchy.py          # Main CLI
+├── singularity.py      # Main CLI (legacy: omarchy.py)
 ├── config.json         # Configuration
 ├── knowledge/          # Knowledge base
 ├── plans/              # Saved plans
@@ -97,18 +97,18 @@ chmod +x install.sh
 
 ```bash
 # Start interactive mode
-omarchy
+singularity  # legacy alias: omarchy
 
 # Direct prompt
-omarchy "explain how React hooks work"
+singularity "explain how React hooks work"
 
 # Specific mode
-omarchy --mode code "create a REST API with FastAPI"
+singularity --mode code "create a REST API with FastAPI"
 ```
 
 ### Interactive Commands
 
-Once in Omarchy:
+Once in Singularity (Omarchy-compatible):
 
 ```
 /mode <name>    - Switch modes (chat, code, plan, batch, learn, analyze)
@@ -119,7 +119,7 @@ Once in Omarchy:
 /exec <cmd>     - Execute shell command
 /git <op>       - Perform git operation
 /help           - Show help
-/exit           - Exit Omarchy
+/exit           - Exit Singularity (legacy: Omarchy)
 ```
 
 ## 🎯 Usage Modes
@@ -127,7 +127,7 @@ Once in Omarchy:
 ### 💬 Chat Mode (Default)
 Natural conversation with the agent:
 ```bash
-omarchy
+singularity
 > How do I implement authentication in Express.js?
 > What are the best practices for error handling?
 > Explain the difference between Promise and async/await
@@ -136,7 +136,7 @@ omarchy
 ### ⚡ Code Mode
 Optimized for code generation:
 ```bash
-omarchy --mode code
+singularity --mode code
 > Create a Python script to scrape weather data
 > Build a React component for a todo list
 > Generate a Dockerfile for a Node.js app
@@ -145,7 +145,7 @@ omarchy --mode code
 ### 📋 Plan Mode
 Break down complex projects:
 ```bash
-omarchy --mode plan
+singularity --mode plan
 > Build a full-stack blog application
 > Create a microservices architecture
 > Implement a CI/CD pipeline
@@ -160,7 +160,7 @@ The agent will create a detailed plan with:
 ### 📦 Batch Mode
 Generate multiple files at once:
 ```bash
-omarchy --mode batch
+singularity --mode batch
 > Create CRUD operations for User, Product, and Order models
 > Generate API endpoints for a blog (posts, comments, users)
 > Set up project structure for a React app with Redux
@@ -169,19 +169,19 @@ omarchy --mode batch
 ### 🎓 Learn Mode
 Research and save knowledge:
 ```bash
-omarchy --mode learn
+singularity --mode learn
 > Research GraphQL best practices
 > Learn about Kubernetes deployment strategies
 > Study Python async patterns
 ```
 
-Knowledge is saved to `~/.omarchy/knowledge/` and can be queried later.
+Knowledge is saved to `~/.singularity/knowledge/` (legacy: `~/.omarchy/knowledge/`) and can be queried later.
 
 ### 🔍 Analyze Mode
 Deep codebase analysis:
 ```bash
 cd your-project
-omarchy --mode analyze
+singularity --mode analyze
 > Review security vulnerabilities
 > Find performance bottlenecks
 > Suggest refactoring opportunities
@@ -192,7 +192,7 @@ omarchy --mode analyze
 
 ### Example 1: Build a REST API
 ```bash
-omarchy --mode code "Create a FastAPI REST API for a todo application with:
+singularity --mode code "Create a FastAPI REST API for a todo application with:
 - User authentication (JWT)
 - CRUD operations for todos
 - SQLAlchemy models
@@ -202,7 +202,7 @@ omarchy --mode code "Create a FastAPI REST API for a todo application with:
 
 ### Example 2: Debug Code
 ```bash
-omarchy "I'm getting this error when running my script:
+singularity "I'm getting this error when running my script:
 TypeError: 'NoneType' object is not iterable
 
 Here's my code:
@@ -214,10 +214,10 @@ What's wrong and how do I fix it?"
 ### Example 3: Learn and Apply
 ```bash
 # Learn
-omarchy --mode learn "Research Docker multi-stage builds"
+singularity --mode learn "Research Docker multi-stage builds"
 
 # Later, apply knowledge
-omarchy --mode code "Create a Dockerfile using multi-stage builds for my Python app"
+singularity --mode code "Create a Dockerfile using multi-stage builds for my Python app"
 ```
 
 ### Example 4: Project Planning
@@ -240,7 +240,7 @@ omarchy --mode plan "Create a real-time chat application with:
 
 ### Example 5: Git Workflow
 ```bash
-omarchy
+singularity
 > Review my changes and suggest a commit message
 
 /git status
@@ -251,7 +251,7 @@ omarchy
 
 ## ⚙️ Configuration
 
-Edit `~/.omarchy/config.json`:
+Edit `~/.singularity/config.json` (legacy: `~/.omarchy/config.json`):
 
 ```json
 {
@@ -289,7 +289,7 @@ omarchy --mode learn "Research Rust ownership and borrowing"
 omarchy "What did I learn about Rust ownership?"
 
 # Browse knowledge base
-cat ~/.omarchy/knowledge/*.json | jq .
+cat ~/.singularity/knowledge/*.json | jq .
 ```
 
 ### Plan Tracking
@@ -320,11 +320,11 @@ Create and track complex plans:
 
 ### Custom Tools
 
-Add your own tools to extend Omarchy:
+Add your own tools to extend Singularity:
 
 ```python
 # Create a new tool
-omarchy
+singularity
 > Add a tool called "deploy" that deploys code to my server using SSH
 
 # The agent will:
@@ -337,10 +337,10 @@ omarchy
 
 ```bash
 # Auto-save is enabled by default
-# Sessions are saved to ~/.omarchy/sessions/
+# Sessions are saved to ~/.singularity/sessions/ (legacy: ~/.omarchy/sessions/)
 
 # Load previous session
-omarchy
+singularity
 /load
 
 # Save current session
@@ -353,7 +353,7 @@ omarchy
 
 ```
 ┌─────────────────┐
-│   Omarchy CLI   │  Beautiful interface with animations
+│  Singularity CLI │  Beautiful interface with animations
 └────────┬────────┘
          │
          ▼
@@ -404,7 +404,7 @@ ollama list
 
 ### Permission Errors
 ```bash
-chmod +x ~/.omarchy/omarchy.py
+chmod +x ~/.singularity/singularity.py
 chmod +x ~/.omarchy/mcp_server.py
 ```
 
@@ -417,15 +417,15 @@ chmod +x ~/.omarchy/mcp_server.py
 ### Reset Everything
 ```bash
 # Remove all data
-rm -rf ~/.omarchy
+rm -rf ~/.singularity (legacy: ~/.omarchy)
 
 # Reinstall
-curl -fsSL https://install.omarchy.com | bash
+curl -fsSL https://install.singularity.com | bash  # legacy: https://install.omarchy.com
 ```
 
 ## 🤝 Contributing
 
-Omarchy is designed to self-improve! You can:
+Singularity is designed to self-improve! You can:
 
 1. **Add new tools** via the CLI itself
 2. **Share knowledge** exports with others
@@ -458,4 +458,4 @@ MIT License - feel free to use, modify, and distribute!
 
 **Made with ❤️ for developers who want powerful AI assistance without the cloud**
 
-Start coding smarter today: `omarchy`
+Start coding smarter today: `singularity` (legacy: `omarchy`)

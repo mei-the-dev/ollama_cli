@@ -548,8 +548,8 @@ echo "  singularity 'your prompt'      - Direct prompt mode"
 echo "  singularity --mode code        - Start in code mode"
 echo "  singularity --help             - Show all options"
 echo ""
-echo "Configuration: ~/.omarchy/config.json"
-echo "Knowledge Base: ~/.omarchy/knowledge/"
+echo "Configuration: ~/.singularity/config.json (legacy: ~/.omarchy/config.json)"
+echo "Knowledge Base: ~/.singularity/knowledge/ (legacy: ~/.omarchy/knowledge/)"
 echo ""
 WELCOME_END
 
@@ -565,10 +565,12 @@ fi
 
 # Test installation
 echo -e "${CYAN}Testing installation...${NC}"
-if command -v omarchy &> /dev/null; then
-    echo -e "${GREEN}✓ Omarchy CLI is ready!${NC}"
+if command -v singularity &> /dev/null; then
+    echo -e "${GREEN}✓ Singularity CLI is ready!${NC}"
+elif command -v omarchy &> /dev/null; then
+    echo -e "${YELLOW}✓ Legacy 'omarchy' alias detected. For new installs prefer 'singularity'.${NC}"
 else
-    echo -e "${YELLOW}Note: Add $HOME/.local/bin to your PATH if omarchy command is not found${NC}"
+    echo -e "${YELLOW}Note: Add $HOME/.local/bin to your PATH if singularity command is not found (legacy: omarchy)${NC}"
     echo "export PATH=\"\$HOME/.local/bin:\$PATH\" >> ~/.bashrc"
 fi
 
@@ -578,50 +580,50 @@ echo ""
 
 # Create quick examples
 cat > "$OMARCHY_DIR/examples.md" << 'EXAMPLES_END'
-# Omarchy Examples
+# Singularity Examples (legacy: Omarchy)
 
 ## Interactive Chat
 ```bash
-omarchy
+singularity
 # Then type: "Explain how async/await works in Python"
 ```
 
 ## Code Generation
 ```bash
-omarchy --mode code "Create a REST API with FastAPI for a todo app"
+singularity --mode code "Create a REST API with FastAPI for a todo app"
 ```
 
 ## Project Planning
 ```bash
-omarchy --mode plan "Build a web scraper for e-commerce sites"
+singularity --mode plan "Build a web scraper for e-commerce sites"
 ```
 
 ## Batch Generation
 ```bash
-omarchy --mode batch "Generate CRUD operations for User, Product, Order models"
+singularity --mode batch "Generate CRUD operations for User, Product, Order models"
 ```
 
 ## Codebase Analysis
 ```bash
 cd your-project
-omarchy --mode analyze "Review security vulnerabilities"
+singularity --mode analyze "Review security vulnerabilities"
 ```
 
 ## Learning Mode
 ```bash
-omarchy --mode learn "Research best practices for React hooks"
+singularity --mode learn "Research best practices for React hooks"
 ```
 
 ## Direct Commands
 ```bash
 # Generate a specific file
-omarchy "Write a Python script to merge PDFs"
+singularity "Write a Python script to merge PDFs"
 
 # Explain existing code
-omarchy "Explain what this code does: $(cat myfile.py)"
+singularity "Explain what this code does: $(cat myfile.py)"
 
 # Debugging help
-omarchy "Why am I getting this error: TypeError: 'NoneType' object is not iterable"
+singularity "Why am I getting this error: TypeError: 'NoneType' object is not iterable"
 ```
 
 ## Advanced Features
@@ -710,7 +712,7 @@ ollama pull qwen2.5-coder:14b-instruct-q4_K_M
 
 ### Permission errors
 ```bash
-chmod +x ~/.omarchy/omarchy.py
+chmod +x ~/.singularity/singularity.py
 ```
 
 ### Reset knowledge base

@@ -1,4 +1,6 @@
-# 🚀 Omarchy v2.0 - Key Improvements
+# 🚀 Singularity v2.0 - Key Improvements (formerly Omarchy)
+
+> NOTE: This document was migrated from the legacy Omarchy project — references to "Omarchy" are retained where they point to historical details.
 
 ## Major Enhancements I'd Want as a Developer
 
@@ -603,7 +605,7 @@ These improvements focus on what matters most for daily development:
 ✅ **Context**: Understand the big picture  
 ✅ **Intelligence**: Smart suggestions, not just automation  
 
-The goal is to make Omarchy feel like a senior developer pair programmer who:
+The goal is to make Singularity feel like a senior developer pair programmer who:
 - Asks before making risky changes
 - Shows their work
 - Explains their reasoning
@@ -612,5 +614,5 @@ The goal is to make Omarchy feel like a senior developer pair programmer who:
 
 **Ready to upgrade?**
 ```bash
-curl -fsSL https://get.omarchy.dev/v2 | bash
+curl -fsSL https://get.singularity.dev/v2 | bash  # legacy: https://get.omarchy.dev/v2
 ```
