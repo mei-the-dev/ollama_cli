@@ -688,7 +688,7 @@ The agent has access to powerful tools:
 
 ## Configuration
 
-Edit `~/.omarchy/config.json`:
+Edit `~/.singularity/config.json` (legacy: `~/.omarchy/config.json`):
 ```json
 {
   "model": "qwen2.5-coder:14b-instruct-q4_K_M",
@@ -717,11 +717,11 @@ chmod +x ~/.singularity/singularity.py
 
 ### Reset knowledge base
 ```bash
-rm -rf ~/.omarchy/knowledge/*
+rm -rf ~/.singularity/knowledge/*  # legacy: ~/.omarchy/knowledge/*
 ```
 EXAMPLES_END
 
-echo -e "${GREEN}✓ Examples saved to ~/.omarchy/examples.md${NC}"
+echo -e "${GREEN}✓ Examples saved to ~/.singularity/examples.md (legacy: ~/.omarchy/examples.md)${NC}"
 echo ""
 echo -e "${CYAN}Try it now:${NC} singularity (legacy 'omarchy' alias supported)"
 echo ""

@@ -218,7 +218,10 @@ class SingularityAgent:
         # (This doesn't send files, but appends a short summary of known topics into the system prompt when available.)
         knowledge_summary = ''
         try:
-            kb_dir = Path.home() / '.omarchy' / 'knowledge'
+            # Prefer new singularity knowledge dir, but keep ~/.omarchy for compatibility during transition
+            kb_dir = Path.home() / '.singularity' / 'knowledge'
+            if not kb_dir.exists():
+                kb_dir = Path.home() / '.omarchy' / 'knowledge'
             if kb_dir.exists():
                 entries = []
                 for f in list(kb_dir.glob('*.json'))[:10]:

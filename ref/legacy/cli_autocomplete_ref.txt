@@ -176,7 +176,7 @@ Replace the `start_dashboard` method in `OmarchyCLI` with this OS-aware version:
         import platform
         
         # Calculate paths
-        # Assuming dashboard is in 'ref/omarchy_dashboard.py' relative to this script
+        # Assuming dashboard is in 'ref/singularity_dashboard.py' relative to this script
         dashboard_script = Path(__file__).parent / 'ref' / 'omarchy_dashboard.py'
         if not dashboard_script.exists():
             console.print(f"[red]Dashboard script not found at {dashboard_script}[/red]")

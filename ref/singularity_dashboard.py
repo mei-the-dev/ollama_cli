@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Omarchy Command Center
-A unified dashboard for monitoring Ollama and the Omarchy MCP Server.
+Singularity Command Center (legacy: Omarchy)
+A unified dashboard for monitoring Ollama and the Singularity MCP Server (Omarchy-compatible).
 
 Save this file in the repo (e.g. `ref/singularity_dashboard.py`) or copy to `~/.singularity/singularity_dashboard.py`.
 """
