@@ -14,12 +14,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 import asyncio
 import aiohttp
+from aiohttp import web
 from datetime import datetime
 import hashlib
 import difflib
 import ast
 import re
 import urllib.request
+import time
 
 # Configuration
 CONFIG_PATH = Path.home() / ".omarchy" / "config.json"
@@ -79,23 +81,42 @@ class MCPServer:
         self.context_memory = []  # Active context window
         self.file_watchers = {}  # Track file changes
 
+        # Telemetry / metrics
+        from collections import deque
+        self.start_time = time.time()
+        self.telemetry = {
+            "request_count": 0,
+            "latencies_ms": deque(maxlen=1000),
+            "recent_requests": deque(maxlen=1000),
+        }
+
     async def http_handler(self, request):
         """HTTP POST /call -> JSON {"name":..., "arguments":{...}}"""
+        start = time.time()
         try:
             payload = await request.json()
         except Exception:
-            return aiohttp.web.json_response({"error": "invalid json"}, status=400)
+            # record telemetry even for bad requests
+            elapsed_ms = (time.time() - start) * 1000.0
+            self._record_telemetry(elapsed_ms)
+            return web.json_response({"error": "invalid json"}, status=400)
         tool_name = payload.get("name")
         arguments = payload.get("arguments", {})
         if not tool_name:
-            return aiohttp.web.json_response({"error": "no tool name"}, status=400)
+            elapsed_ms = (time.time() - start) * 1000.0
+            self._record_telemetry(elapsed_ms)
+            return web.json_response({"error": "no tool name"}, status=400)
         handler = getattr(self, tool_name, None)
         if not handler:
-            return aiohttp.web.json_response({"error": f"Unknown tool: {tool_name}"}, status=400)
+            elapsed_ms = (time.time() - start) * 1000.0
+            self._record_telemetry(elapsed_ms)
+            return web.json_response({"error": f"Unknown tool: {tool_name}"}, status=400)
         try:
             result = handler(arguments)
             if asyncio.iscoroutine(result):
                 result = await result
+            elapsed_ms = (time.time() - start) * 1000.0
+            self._record_telemetry(elapsed_ms)
             if isinstance(result, ToolResult):
                 return aiohttp.web.json_response({
                     "status": result.status.value,
@@ -106,10 +127,65 @@ class MCPServer:
                 })
             return aiohttp.web.json_response(result)
         except Exception as e:
-            return aiohttp.web.json_response({"error": str(e)}, status=500)
+            elapsed_ms = (time.time() - start) * 1000.0
+            self._record_telemetry(elapsed_ms)
+            return web.json_response({"error": str(e)}, status=500)
 
     async def health(self, request):
-        return aiohttp.web.json_response({"status": "ok"})
+        """Health endpoint augmented with basic telemetry metrics"""
+        now = time.time()
+        uptime = now - self.start_time
+        telemetry = self._telemetry_summary()
+        return web.json_response({
+            "status": "ok",
+            "uptime": uptime,
+            "telemetry": telemetry
+        })
+
+    def _record_telemetry(self, latency_ms: float):
+        try:
+            self.telemetry['request_count'] += 1
+            self.telemetry['latencies_ms'].append(latency_ms)
+            self.telemetry['recent_requests'].append(time.time())
+        except Exception:
+            pass
+
+    def _telemetry_summary(self):
+        import statistics
+        latencies = list(self.telemetry.get('latencies_ms', []))
+        summary = {
+            'request_count': int(self.telemetry.get('request_count', 0)),
+            'avg_latency_ms': None,
+            'p50_ms': None,
+            'p95_ms': None,
+            'reqs_last_minute': 0,
+            'gpu_memory_mb': None,
+        }
+        try:
+            if latencies:
+                summary['avg_latency_ms'] = statistics.mean(latencies)
+                summary['p50_ms'] = statistics.median(latencies)
+                if len(latencies) >= 1:
+                    sorted_l = sorted(latencies)
+                    idx = int(len(sorted_l) * 0.95) - 1
+                    idx = max(0, min(idx, len(sorted_l)-1))
+                    summary['p95_ms'] = sorted_l[idx]
+            # requests in last minute
+            cutoff = time.time() - 60.0
+            reqs = [t for t in self.telemetry.get('recent_requests', []) if t >= cutoff]
+            summary['reqs_last_minute'] = len(reqs)
+            # GPU memory via nvidia-smi if available
+            try:
+                import subprocess
+                out = subprocess.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'], capture_output=True, text=True, timeout=1)
+                if out.returncode == 0 and out.stdout:
+                    mb = int(out.stdout.strip().splitlines()[0])
+                    summary['gpu_memory_mb'] = mb
+            except Exception:
+                summary['gpu_memory_mb'] = None
+        except Exception:
+            pass
+        return summary
     
     def init_directories(self):
         """Initialize required directories"""
