@@ -418,6 +418,7 @@ class OmarchyCLI:
             ("/exec <cmd>", "Execute shell command"),
             ("/git <operation>", "Perform git operation"),
             ("/dashboard", "Launch the dashboard (opens a tmux window or background process)"),
+            ("/config show", "Show effective configuration (env + ~/.omarchy/config.json)"),
             ("/help", "Show this help"),
             ("/exit", "Exit Omarchy")
         ]
@@ -569,6 +570,12 @@ class OmarchyCLI:
                             await self.start_dashboard()
                         except Exception as e:
                             console.print(f"[red]Failed to start dashboard: {e}[/red]")
+                    elif cmd == "/config":
+                        sub = args.strip().split() if args else []
+                        if len(sub) >= 1 and sub[0] == 'show':
+                            self.show_config_table()
+                        else:
+                            console.print("[yellow]Usage: /config show[/yellow]")
                     else:
                         console.print(f"[red]Unknown command: {cmd}[/red]")
                     
@@ -592,7 +599,7 @@ class OmarchyCLI:
             "learn": f"Research and learn about: {prompt}. Save findings to knowledge base.",
             "analyze": f"Analyze the codebase focusing on: {prompt}. Provide insights and recommendations."
         }
-        
+
         # Build a tool-aware system prompt instructing the model to emit JSON tool calls when needed
         tool_prompt = (
             f"{self.agent.model} system: If you need to perform actions like writing files or running shell commands, "
@@ -602,6 +609,45 @@ class OmarchyCLI:
         )
         full_prompt = mode_prompts.get(mode, prompt)
         await self.agent.execute_with_animation(full_prompt, f"Processing in {mode} mode", system=tool_prompt)
+
+    def get_effective_config(self) -> Dict:
+        """Return the effective configuration merging environment variables and ~/.omarchy/config.json"""
+        cfg_path = Path.home() / '.omarchy' / 'config.json'
+        file_cfg = {}
+        try:
+            if cfg_path.exists():
+                file_cfg = json.loads(cfg_path.read_text())
+        except Exception:
+            logger.exception('Failed to read config file')
+
+        def env_bool(key, default=False):
+            v = os.environ.get(key)
+            if v is None:
+                return file_cfg.get(key.lower(), default)
+            return v.lower() in ('1', 'true', 'yes', 'on')
+
+        conf = {
+            'allow_sudo': env_bool('OMARCHY_ALLOW_SUDO', file_cfg.get('allow_sudo', False)),
+            'auto_apply': env_bool('OMARCHY_AUTO_APPLY', file_cfg.get('auto_apply', False)),
+            'skip_ollama': env_bool('OMARCHY_SKIP_OLLAMA', False),
+            'model': os.environ.get('OMARCHY_MODEL', file_cfg.get('model', self.agent.model)),
+            'mcp_server_url': getattr(self.agent, 'mcp_server_url', None)
+        }
+        return conf
+
+    def show_config_table(self):
+        """Print config in a human-friendly table"""
+        conf = self.get_effective_config()
+        table = Table(title="Current Configuration", show_header=True)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", style="white")
+        for k, v in conf.items():
+            table.add_row(k, str(v))
+        console.print(table)
+
+    def print_config_json(self):
+        conf = self.get_effective_config()
+        print(json.dumps(conf, indent=2))
     
     async def execute_command(self, cmd: str):
         """Execute shell command asynchronously with animation and logging"""
@@ -665,7 +711,8 @@ class OmarchyCLI:
             try:
                 with open(dashboard_log, 'ab') as f:
                     f.write(f"Started dashboard pid={proc.pid} at {datetime.now().isoformat()}\n".encode('utf-8'))
-
+            except Exception:
+                pass
 
 
 async def main():
@@ -684,6 +731,11 @@ async def main():
     args = parser.parse_args()
     
     cli = OmarchyCLI()
+
+    # Support early CLI command: `omarchy config show` which should not trigger startup
+    if args.prompt and len(args.prompt) >= 2 and args.prompt[0] == 'config' and args.prompt[1] == 'show':
+        cli.print_config_json()
+        return
     
     # Ensure MCP server is running for tools
     try:
