@@ -9,6 +9,7 @@ import json
 import os
 from datetime import datetime
 from collections import deque
+from pathlib import Path
 
 import aiohttp
 import psutil
@@ -180,7 +181,9 @@ class OmarchyDashboard(App):
         yield Footer()
 
     def register_modules(self):
-        """Create module instances and store them in self.modules (no mounting yet)."""
+        """Create module instances and store them in self.modules (no mounting yet).
+        Honor enabled_modules setting from ~/.omarchy/config.json or OMARCHY_PREFERRED_MODULES env var.
+        """
         from ref.dashboard.mcp_monitor import MCPMonitor
         from ref.dashboard.llm_monitor import LLMMonitor
         from ref.dashboard.mcp_metrics import MCPMetrics
@@ -190,23 +193,64 @@ class OmarchyDashboard(App):
         from ref.dashboard.latency_graph import LatencyGraph
         from ref.dashboard.gpu_widget import GPUMetrics
 
+        candidates = [
+            ('mcp', MCPMonitor()),
+            ('llm', LLMMonitor()),
+            ('mcp_metrics', MCPMetrics()),
+            ('llm_telemetry', LLMTelemetry()),
+            ('req_rate', RequestRate()),
+            ('latency', LatencyGraph()),
+            ('gpu', GPUMetrics()),
+            ('log_tail', LogTail()),
+        ]
+
+        enabled = self._read_enabled_modules()
+        # initialize registries
+        self._widget_registry = []
+        self._disabled_modules = []
+        self._kpi_map = {}
+
         self.modules = []
-        self.modules.extend([
-            MCPMonitor(),
-            LLMMonitor(),
-            MCPMetrics(),
-            LLMTelemetry(),
-            RequestRate(),
-            LatencyGraph(),
-            GPUMetrics(),
-            LogTail()
-        ])
+        for name, inst in candidates:
+            inst._module_name = name
+            inst._enabled = (enabled is None) or (name in enabled)
+            self.modules.append(inst)
+
+    def _config_path(self):
+        return Path.home() / '.omarchy' / 'config.json'
+
+    def _read_enabled_modules(self):
+        # Check env var first
+        env = os.environ.get('OMARCHY_PREFERRED_MODULES')
+        if env:
+            return [m.strip() for m in env.split(',') if m.strip()]
+        cfgp = self._config_path()
+        if not cfgp.exists():
+            return None
+        try:
+            j = json.loads(cfgp.read_text())
+            return j.get('enabled_modules')
+        except Exception:
+            return None
+
+    def _write_enabled_modules(self, modules_list):
+        cfgp = self._config_path()
+        cfgp.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            cfg = json.loads(cfgp.read_text()) if cfgp.exists() else {}
+        except Exception:
+            cfg = {}
+        cfg['enabled_modules'] = modules_list
+        cfgp.write_text(json.dumps(cfg, indent=2))
+
 
     def mount_modules(self):
         """Attempt to mount modules' widgets into the UI; always add widget references to _widget_registry so tests can inspect them.
-        Also create fallback KPI placeholders in `_kpi_map` so modules can update KPIs even when the Textual DOM is not active (headless tests)."""
+        Also create fallback KPI placeholders in `_kpi_map` so modules can update KPIs even when the Textual DOM is not active (headless tests).
+        Only mount modules which are enabled per config; disabled modules will be skipped and recorded."""
         self._widget_registry = []
         self._kpi_map = {}
+        self._disabled_modules = []
         # try to locate existing KPI static slots - if not present, create placeholders
         for kid in ('#kpi-ollama', '#kpi-mcp', '#kpi-reqs', '#kpi-lat'):
             try:
@@ -216,6 +260,10 @@ class OmarchyDashboard(App):
                 self._kpi_map[kid] = ''  # placeholder text
 
         for m in self.modules:
+            if getattr(m, '_enabled', True) is False:
+                if m._module_name not in self._disabled_modules:
+                    self._disabled_modules.append(m._module_name)
+                continue
             try:
                 m.mount(self)
                 m._mounted = True
@@ -223,7 +271,8 @@ class OmarchyDashboard(App):
                 m._mounted = False
             # record widget reference for tests even if mount deferred
             if hasattr(m, 'widget'):
-                self._widget_registry.append(m.widget)
+                if m.widget not in self._widget_registry:
+                    self._widget_registry.append(m.widget)
 
     def set_kpi(self, kpi_id: str, text: str):
         """Set KPI text by id (e.g., '#kpi-mcp'). Always update the internal placeholder map so tests can read it."""
@@ -234,6 +283,63 @@ class OmarchyDashboard(App):
             # Store placeholder text for tests / headless
             self._kpi_map.setdefault(kpi_id, text)
             self._kpi_map[kpi_id] = text
+
+    def enable_module(self, name: str):
+        """Enable and persist a module by name. If the module is currently disabled, mount and start it."""
+        # update config file
+        enabled = set(self._read_enabled_modules() or [])
+        enabled.add(name)
+        self._write_enabled_modules(list(enabled))
+        # find module and enable
+        for m in self.modules:
+            if getattr(m, '_module_name', None) == name:
+                m._enabled = True
+                try:
+                    m.mount(self)
+                    m._mounted = True
+                except Exception:
+                    m._mounted = False
+                try:
+                    self.call_later(lambda m=m: self.start_module(m))
+                except Exception:
+                    pass
+                if hasattr(m, 'widget'):
+                    self._widget_registry.append(m.widget)
+
+    def disable_module(self, name: str):
+        """Disable and persist a module by name. If the module is running, stop/unmount it."""
+        enabled = set(self._read_enabled_modules() or [])
+        if name in enabled:
+            enabled.remove(name)
+        self._write_enabled_modules(list(enabled))
+        for m in self.modules:
+            if getattr(m, '_module_name', None) == name:
+                m._enabled = False
+                if name not in self._disabled_modules:
+                    self._disabled_modules.append(name)
+                try:
+                    if getattr(m, 'stop', None):
+                        self.call_later(lambda m=m: self.run_module_stop(m))
+                except Exception:
+                    pass
+                # remove widget from registry
+                if hasattr(m, 'widget') and hasattr(self, '_widget_registry') and m.widget in self._widget_registry:
+                    try:
+                        self._widget_registry.remove(m.widget)
+                    except Exception:
+                        pass
+
+    async def run_module_stop(self, m):
+        try:
+            await m.stop()
+        except Exception:
+            pass
+
+    def toggle_module(self, name: str):
+        if name in (self._read_enabled_modules() or []):
+            self.disable_module(name)
+        else:
+            self.enable_module(name)
 
     def get_kpi_text(self, kpi_id: str):
         try:
