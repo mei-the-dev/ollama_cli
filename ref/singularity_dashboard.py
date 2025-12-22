@@ -3,7 +3,7 @@
 Omarchy Command Center
 A unified dashboard for monitoring Ollama and the Omarchy MCP Server.
 
-Save this file in the repo (e.g. `ref/omarchy_dashboard.py`) or copy to `~/.omarchy/omarchy_dashboard.py`.
+Save this file in the repo (e.g. `ref/singularity_dashboard.py`) or copy to `~/.singularity/singularity_dashboard.py`.
 """
 import json
 import os
@@ -139,9 +139,9 @@ class ResourceGraph(Static):
         self.query_one("#val-lbl").update(f"{usage:.1f}%")
 
 
-class OmarchyDashboard(App):
+class SingularityDashboard(App):
     CSS = CSS
-    TITLE = "OMARCHY COMMAND CENTER"
+    TITLE = "SINGULARITY COMMAND CENTER"
     SUB_TITLE = "v2.0 | Model & Tool Monitor"
 
     ollama_online = reactive(False)
@@ -182,7 +182,7 @@ class OmarchyDashboard(App):
 
     def register_modules(self):
         """Create module instances and store them in self.modules (no mounting yet).
-        Honor enabled_modules setting from ~/.omarchy/config.json or OMARCHY_PREFERRED_MODULES env var.
+        Honor enabled_modules setting from ~/.singularity/config.json or SINGULARITY_PREFERRED_MODULES env var.
         """
         from ref.dashboard.mcp_monitor import MCPMonitor
         from ref.dashboard.llm_monitor import LLMMonitor
@@ -221,7 +221,7 @@ class OmarchyDashboard(App):
 
     def _read_enabled_modules(self):
         # Check env var first
-        env = os.environ.get('OMARCHY_PREFERRED_MODULES')
+        env = os.environ.get('SINGULARITY_PREFERRED_MODULES')
         if env:
             return [m.strip() for m in env.split(',') if m.strip()]
         cfgp = self._config_path()
@@ -580,7 +580,7 @@ class OmarchyDashboard(App):
 
 
 def main():
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     app.run()
 
 

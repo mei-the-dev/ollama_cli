@@ -24,7 +24,10 @@ import urllib.request
 import time
 
 # Configuration
-CONFIG_PATH = Path.home() / ".omarchy" / "config.json"
+CONFIG_DIR = Path.home() / ".singularity"
+LEGACY_CONFIG_DIR = Path.home() / ".omarchy"
+BASE_CONFIG_DIR = CONFIG_DIR if CONFIG_DIR.exists() else LEGACY_CONFIG_DIR
+CONFIG_PATH = BASE_CONFIG_DIR / "config.json"
 
 def load_config():
     default = {
@@ -64,12 +67,12 @@ class ToolResult:
 class MCPServer:
     def __init__(self):
         self.config = load_config()
-        self.knowledge_base = Path.home() / ".omarchy" / "knowledge"
-        self.tools_dir = Path.home() / ".omarchy" / "tools"
-        self.plans_dir = Path.home() / ".omarchy" / "plans"
-        self.cache_dir = Path.home() / ".omarchy" / "cache"
-        self.context_dir = Path.home() / ".omarchy" / "context"
-        self.templates_dir = Path.home() / ".omarchy" / "templates"
+        self.knowledge_base = BASE_CONFIG_DIR / "knowledge"
+        self.tools_dir = BASE_CONFIG_DIR / "tools"
+        self.plans_dir = BASE_CONFIG_DIR / "plans"
+        self.cache_dir = BASE_CONFIG_DIR / "cache"
+        self.context_dir = BASE_CONFIG_DIR / "context"
+        self.templates_dir = BASE_CONFIG_DIR / "templates"
         self.init_directories()
         # Ensure config file exists with defaults if not present
         try:

@@ -1,5 +1,5 @@
 import pytest
-from ref.omarchy_dashboard import OmarchyDashboard
+from ref.singularity_dashboard import SingularityDashboard
 
 @pytest.mark.asyncio
 async def test_dashboard_kpi_updates(monkeypatch):
@@ -27,10 +27,10 @@ async def test_dashboard_kpi_updates(monkeypatch):
         def post(self, url, json=None, timeout=None):
             return FakeResp(200)
 
-    monkeypatch.setenv('OMARCHY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
+    monkeypatch.setenv('SINGULARITY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
     monkeypatch.setattr('aiohttp.ClientSession', lambda: FakeSession())
 
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     app.register_modules()
     app.mount_modules()
 

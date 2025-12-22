@@ -82,12 +82,12 @@ async def test_save_and_load_session(temp_home):
     server.conversation_history = [{'role': 'user', 'content': 'hi'}]
     server.current_plan = {'id': 'plan_1'}
     # prepare context
-    ctx_file = Path.home() / '.omarchy' / 'context' / 'context.json'
+    ctx_file = Path.home() / '.singularity' / 'context' / 'context.json'
     ctx_file.parent.mkdir(parents=True, exist_ok=True)
     ctx_file.write_text(json.dumps([{'id':'1','content':'test'}]))
     s = await server.save_session({'name': 's1', 'description': 'desc'})
     assert s.status == ToolStatus.SUCCESS
-    sessions_dir = Path.home() / '.omarchy' / 'sessions'
+    sessions_dir = Path.home() / '.singularity' / 'sessions'
     session_file = sessions_dir / 's1.json'
     assert session_file.exists()
     loaded = await server.load_session({'name': 's1'})
@@ -118,10 +118,10 @@ async def test_refactor_rename(tmp_path):
 
 @pytest.mark.asyncio
 async def test_cli_starts_mcp_server(tmp_path, monkeypatch):
-    # Ensure ~/.omarchy/mcp_server.py exists for the test HOME
+    # Ensure ~/.singularity/mcp_server.py exists for the test HOME
     home = tmp_path
     monkeypatch.setenv('HOME', str(home))
-    om_dir = home / '.omarchy'
+    om_dir = home / '.singularity'
     om_dir.mkdir(parents=True, exist_ok=True)
     # Copy the project mcp_server.py into the test HOME
     src = Path(__file__).resolve().parents[1] / 'mcp_server.py'
@@ -129,8 +129,8 @@ async def test_cli_starts_mcp_server(tmp_path, monkeypatch):
     dst.write_text(src.read_text())
     dst.chmod(0o755)
     # Start via OmarchyAgent
-    from omarchy_cli import OmarchyAgent
-    agent = OmarchyAgent()
+    from omarchy_cli import SingularityAgent
+    agent = SingularityAgent()
     proc = await agent.start_mcp_server(timeout=3.0)
     assert proc is not None
     # Wait briefly and perform health check

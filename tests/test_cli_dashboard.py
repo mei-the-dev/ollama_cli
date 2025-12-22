@@ -3,7 +3,7 @@ import types
 
 import pytest
 
-from omarchy_cli import OmarchyCLI
+from omarchy_cli import SingularityCLI
 
 
 @pytest.mark.asyncio
@@ -60,7 +60,7 @@ async def test_start_dashboard_without_tmux(monkeypatch, tmp_path):
     import sys as _sys
     assert calls[0][0] == _sys.executable
     # Dashboard path should be passed somewhere in the args
-    assert any('omarchy_dashboard.py' in str(a) for a in calls[0])
+    assert any('singularity_dashboard.py' in str(a) for a in calls[0])
 
 
 

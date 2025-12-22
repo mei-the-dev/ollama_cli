@@ -1,10 +1,10 @@
 import pytest
-from ref.omarchy_dashboard import OmarchyDashboard
+from ref.singularity_dashboard import SingularityDashboard
 
 @pytest.mark.asyncio
 async def test_mcp_env_passed_to_dashboard(monkeypatch, tmp_path):
     # Ensure dashboard reads OMARCHY_MCP_SERVER_URL env var
-    monkeypatch.setenv('OMARCHY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
+    monkeypatch.setenv('SINGULARITY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
 
     # Prepare a fake aiohttp session that records the URL called
     class FakeResp:
@@ -48,7 +48,7 @@ async def test_mcp_env_passed_to_dashboard(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_modules_mounted_into_kpi(monkeypatch):
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     # Explicit registration and mounting for tests (UI might be headless)
     app.register_modules()
     app.mount_modules()

@@ -2,25 +2,25 @@ import sys
 from pathlib import Path
 import pytest
 
-from omarchy_cli import OmarchyCLI
+from omarchy_cli import SingularityCLI
 
 
 def test_show_banner_runs(capsys):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     # show_banner should run without error and print something
     cli.show_banner()
     captured = capsys.readouterr()
-    assert "Omarchy" in captured.out or "Artistic Code Agent" in captured.out
+    assert "Singularity" in captured.out or "Artistic Code Agent" in captured.out
 
 
 @pytest.mark.asyncio
 async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     # Ensure non-interactive environment
     monkeypatch.setattr(sys.stdin, 'isatty', lambda: False)
 
     # Remove any existing config
-    cfg_path = Path.home() / '.omarchy' / 'config.json'
+    cfg_path = Path.home() / '.singularity' / 'config.json'
     if cfg_path.exists():
         bak = tmp_path / 'cfg_backup.json'
         bak.write_text(cfg_path.read_text())

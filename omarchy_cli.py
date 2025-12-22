@@ -61,7 +61,7 @@ BANNER = """
     ╚═╗└┬┘├┤ ├─┘├┤ │││  ║  ├─┤├┤ └┐┌┘
     ╚═╝ ┴ └─┘┴  └  └┴┘  ╚═╝┴ ┴└─┘ └┘
 [/bold magenta]
-[bold cyan]Omarchy — Artistic Code Agent[/bold cyan]
+[bold cyan]Singularity — Artistic Code Agent[/bold cyan]
 [dim]🔮 Powered by Qwen2.5-Coder 14B via Ollama | Use @web, @file, @diff, @tree for Context Providers[/dim]
 """
 
@@ -71,10 +71,10 @@ COMPLETE_SYMBOL = "✓"
 ERROR_SYMBOL = "✗"
 
 
-class OmarchyAgent:
+class SingularityAgent:
     def __init__(self):
         self.model = "qwen2.5-coder:14b-instruct-q4_K_M"
-        self.mcp_server_path = Path.home() / ".omarchy" / "mcp_server.py"
+        self.mcp_server_path = Path.home() / ".singularity" / "mcp_server.py"
         self.conversation_history = []
         self.current_plan = None
         
@@ -304,7 +304,7 @@ class OmarchyAgent:
             console.print(f"  [yellow]→[/yellow] Executing: [bold]{tool_name}[/bold]")
 
             # If write_code, optionally confirm with user unless auto_apply is enabled or non-interactive
-            auto_apply = bool(os.environ.get('OMARCHY_AUTO_APPLY')) or getattr(self, 'auto_apply', False)
+            auto_apply = bool(os.environ.get('SINGULARITY_AUTO_APPLY')) or getattr(self, 'auto_apply', False)
             interactive = sys.stdin.isatty()
             if tool_name == 'write_code' and not auto_apply:
                 if interactive:
@@ -370,11 +370,11 @@ class OmarchyAgent:
         console.print(table)
 
 
-class OmarchyCLI:
+class SingularityCLI:
     def __init__(self):
-        self.agent = OmarchyAgent()
-        # Auto-apply writes if env OMARCHY_AUTO_APPLY=1 or config auto_apply true
-        self.auto_apply = bool(os.environ.get('OMARCHY_AUTO_APPLY'))
+        self.agent = SingularityAgent()
+        # Auto-apply writes if env SINGULARITY_AUTO_APPLY=1 or config auto_apply true
+        self.auto_apply = bool(os.environ.get('SINGULARITY_AUTO_APPLY'))
         self.sudo_password = None
         self.modes = {
             "chat": "💬 Interactive chat mode",
@@ -466,7 +466,7 @@ class OmarchyCLI:
         # Transfer context
         try:
             if Confirm.ask("Transfer conversation context (context.json) to the model? "):
-                ctx_file = Path.home() / '.omarchy' / 'context' / 'context.json'
+                ctx_file = Path.home() / '.singularity' / 'context' / 'context.json' 
                 if ctx_file.exists():
                     try:
                         ctx = json.loads(ctx_file.read_text())
@@ -607,8 +607,8 @@ class OmarchyCLI:
         await self.agent.execute_with_animation(full_prompt, f"Processing in {mode} mode", system=tool_prompt)
 
     def get_effective_config(self) -> Dict:
-        """Return the effective configuration merging environment variables and ~/.omarchy/config.json"""
-        cfg_path = Path.home() / '.omarchy' / 'config.json'
+        """Return the effective configuration merging environment variables and ~/.singularity/config.json"""
+        cfg_path = Path.home() / '.singularity' / 'config.json' 
         file_cfg = {}
         try:
             if cfg_path.exists():
@@ -681,7 +681,7 @@ class OmarchyCLI:
         - Otherwise, start the dashboard as a background Python process and write logs to ./logs/dashboard.log
         """
         import time
-        dashboard_path = os.path.join(os.path.dirname(__file__), 'ref', 'omarchy_dashboard.py')
+        dashboard_path = os.path.join(os.path.dirname(__file__), 'ref', 'singularity_dashboard.py')
 
         # Ensure log dir exists
         log_dir = os.path.join(os.path.dirname(__file__), 'logs')

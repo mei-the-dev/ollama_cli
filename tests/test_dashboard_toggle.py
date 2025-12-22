@@ -1,9 +1,9 @@
 import pytest
-from ref.omarchy_dashboard import OmarchyDashboard
+from ref.singularity_dashboard import SingularityDashboard
 
 @pytest.mark.asyncio
 async def test_toggle_log_state():
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     app.register_modules()
     app.mount_modules()
     # initial state should be not collapsed

@@ -35,8 +35,8 @@ async def test_request_rate_module(monkeypatch):
     assert len(m.widget.history) >= 1
 
     # Ensure dashboard quickly registers and mounts modules into KPI slots
-    from ref.omarchy_dashboard import OmarchyDashboard
-    app = OmarchyDashboard()
+    from ref.singularity_dashboard import SingularityDashboard
+    app = SingularityDashboard()
     app.register_modules()
     app.mount_modules()
     assert hasattr(app, '_widget_registry')

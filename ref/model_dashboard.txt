@@ -132,7 +132,7 @@ class ResourceGraph(Static):
         self.query_one(Sparkline).add_value(usage)
         self.query_one("#val-lbl").update(f"{usage:.1f}%")
 
-class OmarchyDashboard(App):
+class SingularityDashboard(App):
     CSS = CSS
     TITLE = "OMARCHY COMMAND CENTER"
     SUB_TITLE = "v2.0 | Model & Tool Monitor"
@@ -342,7 +342,7 @@ class OmarchyDashboard(App):
             log.write(f"\n[red]Error: {e}[/red]")
 
 if __name__ == "__main__":
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     app.run()
 
 ```

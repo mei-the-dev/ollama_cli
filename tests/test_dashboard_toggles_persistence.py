@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from ref.omarchy_dashboard import OmarchyDashboard
+from ref.singularity_dashboard import SingularityDashboard
 
 def read_config():
     p = Path.home() / '.omarchy' / 'config.json'

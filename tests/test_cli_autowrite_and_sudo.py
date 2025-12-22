@@ -1,9 +1,9 @@
-from omarchy_cli import OmarchyCLI, OmarchyAgent
+from omarchy_cli import SingularityCLI, SingularityAgent
 from mcp_server import MCPServer, ToolStatus
 import pytest
 from typing import Optional
 
-class DummyAgent(OmarchyAgent):
+class DummyAgent(SingularityAgent):
     def __init__(self):
         super().__init__()
         # don't actually start subprocess
@@ -14,7 +14,7 @@ class DummyAgent(OmarchyAgent):
 
 @pytest.mark.asyncio
 async def test_cli_autowrite(monkeypatch, tmp_path, capsys):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     # Make agent a dummy that yields a write_code tool call
     cli.agent = DummyAgent()
     cli.auto_apply = True

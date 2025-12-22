@@ -29,7 +29,7 @@ SKIP_OLLAMA=1 ./scripts/launch_with_dashboard.sh
 If `tmux` is not installed the launcher will start backgrounded processes and write logs to `./logs/`.
 
 Notes and configuration
-- The dashboard expects the MCP server at `http://localhost:8080/mcp` and Ollama at `http://localhost:11434` — set `OMARCHY_MODEL` to change the default model used in the inference lab.
+- The dashboard expects the MCP server at `http://localhost:8080/mcp` and Ollama at `http://localhost:11434` — set `SINGULARITY_MODEL` to change the default model used in the inference lab.
 - The dashboard is intended for local development and observability only.
 
 Tips

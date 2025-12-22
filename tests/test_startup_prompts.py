@@ -1,5 +1,5 @@
 import json
-from omarchy_cli import OmarchyCLI
+from omarchy_cli import SingularityCLI
 
 
 def test_startup_prompts_enable_auto_and_sudo(monkeypatch, tmp_path):
@@ -7,11 +7,11 @@ def test_startup_prompts_enable_auto_and_sudo(monkeypatch, tmp_path):
     monkeypatch.setenv('HOME', str(tmp_path))
 
     # Create config file with defaults
-    cfg = tmp_path / '.omarchy' / 'config.json'
+    cfg = tmp_path / '.singularity' / 'config.json'
     cfg.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text(json.dumps({"model":"x","allow_sudo":False, "auto_apply": False}))
 
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
 
     # Monkeypatch Confirm.ask to return True for all prompts
     monkeypatch.setattr('rich.prompt.Confirm.ask', lambda *args, **kwargs: True)

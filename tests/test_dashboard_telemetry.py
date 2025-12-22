@@ -28,7 +28,7 @@ async def test_mcp_metrics_reads_health(monkeypatch):
         def get(self, url, timeout=None):
             return FakeResp(200, {'status': 'ok', 'uptime': 42})
 
-    monkeypatch.setenv('OMARCHY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
+    monkeypatch.setenv('SINGULARITY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
     monkeypatch.setattr('aiohttp.ClientSession', lambda: FakeSession())
 
     m = MCPMetrics()
