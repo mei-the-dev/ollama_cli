@@ -254,7 +254,7 @@ class OmarchyDashboard(App):
         # try to locate existing KPI static slots - if not present, create placeholders
         for kid in ('#kpi-ollama', '#kpi-mcp', '#kpi-reqs', '#kpi-lat'):
             try:
-                w = self.query_one(kid)
+                self.query_one(kid)
                 self._kpi_map[kid] = None  # presence confirmed
             except Exception:
                 self._kpi_map[kid] = ''  # placeholder text
@@ -403,22 +403,14 @@ class OmarchyDashboard(App):
         # Expose an action that UI buttons can call
         self.toggle_log()
 
-    async def on_button_pressed(self, event):
-        if getattr(event, 'button', None) and event.button.id == 'btn-toggle-log':
-            self.toggle_log()
-
     def refresh_kpis(self):
         # Update KPI slots by reading module widgets where available
         try:
             # Update Ollama/MCP and telemetry KPIs
             for w in getattr(self, '_widget_registry', []):
                 # match by class name or id heuristics
-                txt = None
-                try:
-                    txt = getattr(w, 'renderable', None)
-                except Exception:
-                    txt = None
                 # For now, rely on module widgets updating log and status; leave placeholders
+                pass
         except Exception:
             pass
 
@@ -493,8 +485,13 @@ class OmarchyDashboard(App):
             graphs[1].update_data(python_cpu)
 
     async def on_button_pressed(self, event):
-        if event.button.id == "btn-refresh-tools":
+        btn = getattr(event, 'button', None)
+        if not btn:
+            return
+        if btn.id == "btn-refresh-tools":
             await self.check_tools()
+        elif btn.id == "btn-toggle-log":
+            self.toggle_log()
 
     @work
     async def check_tools(self):

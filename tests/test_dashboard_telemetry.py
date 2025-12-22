@@ -1,6 +1,4 @@
-import os
 import pytest
-import asyncio
 
 from ref.dashboard.mcp_metrics import MCPMetrics
 from ref.dashboard.llm_telemetry import LLMTelemetry

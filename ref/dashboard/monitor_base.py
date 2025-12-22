@@ -1,4 +1,3 @@
-from textual.widgets import Static
 
 class BaseModule:
     """Base class for dashboard monitoring modules.

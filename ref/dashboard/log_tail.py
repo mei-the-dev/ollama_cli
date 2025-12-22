@@ -28,8 +28,8 @@ class LogTail(BaseModule):
             with open(self.path, 'r', encoding='utf-8', errors='replace') as f:
                 data = f.read().splitlines()[-self.lines:]
             self.widget.clear()
-            for l in data:
-                self.widget.write(l)
+            for line in data:
+                self.widget.write(line)
         except Exception:
             pass
 

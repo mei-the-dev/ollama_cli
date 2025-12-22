@@ -9,7 +9,6 @@ from omarchy_cli import OmarchyCLI
 @pytest.mark.asyncio
 async def test_start_dashboard_with_tmux(monkeypatch, tmp_path):
     cli = OmarchyCLI()
-    called = {}
 
     # Monkeypatch shutil.which to pretend tmux exists
     import shutil

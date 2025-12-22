@@ -1,13 +1,14 @@
 from omarchy_cli import OmarchyCLI, OmarchyAgent
 from mcp_server import MCPServer, ToolStatus
 import pytest
+from typing import Optional
 
 class DummyAgent(OmarchyAgent):
     def __init__(self):
         super().__init__()
         # don't actually start subprocess
         self.mcp_server_url = 'http://127.0.0.1:9999'
-    async def call_ollama(self, prompt: str, system: str = None, tools: list = None):
+    async def call_ollama(self, prompt: str, system: Optional[str] = None, tools: Optional[list] = None):
         # Simulate model returning a JSON tool call to write_code
         yield {'type': 'tool_calls', 'data': {'tool': 'write_code', 'args': {'filepath': 'test_out.txt', 'content': 'hello', 'mode': 'overwrite'}}}
 

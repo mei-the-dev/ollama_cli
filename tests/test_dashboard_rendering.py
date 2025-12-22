@@ -1,6 +1,4 @@
-import os
 import pytest
-import asyncio
 from ref.omarchy_dashboard import OmarchyDashboard
 
 @pytest.mark.asyncio

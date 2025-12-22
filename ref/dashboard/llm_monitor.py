@@ -1,4 +1,3 @@
-import os
 import aiohttp
 from textual.widgets import Static
 from textual import work

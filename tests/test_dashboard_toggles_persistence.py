@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 import pytest
 from ref.omarchy_dashboard import OmarchyDashboard

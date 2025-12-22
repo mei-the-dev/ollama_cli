@@ -1,6 +1,3 @@
-import os
-import asyncio
-import types
 import pytest
 from ref.omarchy_dashboard import OmarchyDashboard
 

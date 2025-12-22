@@ -1,6 +1,4 @@
 import pytest
-import asyncio
-import time
 from mcp_server import MCPServer
 
 class FakeRequest:
@@ -26,7 +24,6 @@ async def test_health_includes_telemetry():
     # call a dummy request to record one
     req = FakeRequest({'name': 'list_tools'})
     await srv.http_handler(req)
-    h = await srv.health(None)
     # h is aiohttp.web.Response; access via .text or .body; easier: call _telemetry_summary()
     summary = srv._telemetry_summary()
     assert 'avg_latency_ms' in summary

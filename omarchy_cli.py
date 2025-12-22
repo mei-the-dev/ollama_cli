@@ -10,7 +10,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 import subprocess
 import shutil
 import argparse
@@ -148,7 +148,7 @@ class OmarchyAgent:
                 self.mcp_process = None
                 self.mcp_server_url = None
     
-    async def call_ollama(self, prompt: str, system: str = None, tools: List[Dict] = None):
+    async def call_ollama(self, prompt: str, system: Optional[str] = None, tools: Optional[List[Dict]] = None):
         """Call Ollama with streaming support"""
         messages = self.conversation_history.copy()
         messages.append({"role": "user", "content": prompt})
@@ -208,7 +208,7 @@ class OmarchyAgent:
         except Exception as e:
             yield {"type": "error", "data": str(e)}
     
-    async def execute_with_animation(self, prompt: str, task_description: str, system: str = None):
+    async def execute_with_animation(self, prompt: str, task_description: str, system: Optional[str] = None):
         # When executing with animation, ensure model gets current knowledge/context from disk if configured
         # (This doesn't send files, but appends a short summary of known topics into the system prompt when available.)
         knowledge_summary = ''
@@ -320,8 +320,9 @@ class OmarchyAgent:
 
             # If execute_code and sudo requested, attach sudo_password if available
             if tool_name == 'execute_code' and tool_args.get('sudo'):
-                if self.sudo_password:
-                    tool_args['sudo_password'] = self.sudo_password
+                sudo_pw = getattr(self, 'sudo_password', None)
+                if sudo_pw:
+                    tool_args['sudo_password'] = sudo_pw
 
             # Execute tool via MCP server HTTP API
             try:

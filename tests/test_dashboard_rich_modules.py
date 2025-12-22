@@ -1,6 +1,4 @@
-import os
 import pytest
-import asyncio
 from ref.dashboard.request_rate import RequestRate
 from ref.dashboard.latency_graph import LatencyGraph
 from ref.dashboard.gpu_widget import GPUMetrics
