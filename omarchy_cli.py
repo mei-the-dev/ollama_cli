@@ -81,8 +81,13 @@ class SingularityAgent:
     async def start_mcp_server(self, timeout: float = 5.0):
         """Start the MCP server process and wait for it to announce a listening port."""
         if not self.mcp_server_path.exists():
-            console.print("[yellow]MCP server not found. Please install it first.[/yellow]")
-            return None
+            # Fallback: if there's a copy of mcp_server.py in the repository, use it (useful for tests/local dev)
+            repo_path = Path(__file__).resolve().parents[0] / 'mcp_server.py'
+            if repo_path.exists():
+                self.mcp_server_path = repo_path
+            else:
+                console.print("[yellow]MCP server not found. Please install it first (or copy mcp_server.py to ~/.singularity/).[/yellow]")
+                return None
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -481,7 +486,7 @@ class SingularityCLI:
         # Auto-apply writes
         try:
             if Confirm.ask("Enable auto-approval for file writes (auto-apply)? This will allow the CLI to apply agent-suggested file writes without prompting."):
-                cfg_path = Path.home() / '.omarchy' / 'config.json'
+                cfg_path = Path.home() / '.singularity' / 'config.json'
                 try:
                     cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
                 except Exception:
@@ -489,7 +494,7 @@ class SingularityCLI:
                 cfg['auto_apply'] = True
                 cfg_path.parent.mkdir(parents=True, exist_ok=True)
                 cfg_path.write_text(json.dumps(cfg, indent=2))
-                os.environ['OMARCHY_AUTO_APPLY'] = '1'
+                os.environ['SINGULARITY_AUTO_APPLY'] = '1'
                 self.auto_apply = True
                 console.print('[green]Auto-apply enabled.[/green]')
         except Exception:
@@ -498,7 +503,7 @@ class SingularityCLI:
         # Sudo privileges
         try:
             if Confirm.ask("Enable sudo privileges for MCP server tools? (This allows the server to run sudo commands.)"):
-                cfg_path = Path.home() / '.omarchy' / 'config.json'
+                cfg_path = Path.home() / '.singularity' / 'config.json'
                 try:
                     cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
                 except Exception:
@@ -514,7 +519,7 @@ class SingularityCLI:
                         console.print('[green]Sudo password stored for session.[/green]')
                     except Exception:
                         console.print('[yellow]Could not read password; sudo will use non-interactive mode and may fail if password required.[/yellow]')
-                console.print('[green]Sudo enabled in config. You can disable it later at ~/.omarchy/config.json[/green]')
+                console.print('[green]Sudo enabled in config. You can disable it later at ~/.singularity/config.json[/green]')
         except Exception:
             console.print('[yellow]Skipping sudo configuration.[/yellow]')    
     async def interactive_mode(self):
@@ -623,12 +628,12 @@ class SingularityCLI:
             return v.lower() in ('1', 'true', 'yes', 'on')
 
         conf = {
-            'allow_sudo': env_bool('OMARCHY_ALLOW_SUDO', file_cfg.get('allow_sudo', False)),
-            'auto_apply': env_bool('OMARCHY_AUTO_APPLY', file_cfg.get('auto_apply', False)),
-            'skip_ollama': env_bool('OMARCHY_SKIP_OLLAMA', False),
-            'model': os.environ.get('OMARCHY_MODEL', file_cfg.get('model', self.agent.model)),
+            'allow_sudo': env_bool('SINGULARITY_ALLOW_SUDO', file_cfg.get('allow_sudo', False)),
+            'auto_apply': env_bool('SINGULARITY_AUTO_APPLY', file_cfg.get('auto_apply', False)),
+            'skip_ollama': env_bool('SINGULARITY_SKIP_OLLAMA', False),
+            'model': os.environ.get('SINGULARITY_MODEL', file_cfg.get('model', self.agent.model)),
             'mcp_server_url': getattr(self.agent, 'mcp_server_url', None),
-            'preferred_terminal': os.environ.get('OMARCHY_PREFERRED_TERMINAL', file_cfg.get('preferred_terminal'))
+            'preferred_terminal': os.environ.get('SINGULARITY_PREFERRED_TERMINAL', file_cfg.get('preferred_terminal'))
         }
         return conf
 
@@ -694,7 +699,7 @@ class SingularityCLI:
 
         if tmux_path:
 # Prepare MCP server URL to pass into the dashboard
-                mcp_url = getattr(self.agent, 'mcp_server_url', None) or os.environ.get('OMARCHY_MCP_SERVER_URL') or 'http://127.0.0.1:8000'
+                mcp_url = getattr(self.agent, 'mcp_server_url', None) or os.environ.get('SINGULARITY_MCP_SERVER_URL') or 'http://127.0.0.1:8000'
 
                 # If we're already inside tmux, create a new window in the current session so the user sees it.
                 if 'TMUX' in os.environ:
@@ -743,7 +748,7 @@ class SingularityCLI:
             # Start background process and detach using the same Python interpreter as the CLI
             mcp_url = getattr(self.agent, 'mcp_server_url', None) or os.environ.get('OMARCHY_MCP_SERVER_URL') or 'http://127.0.0.1:8000'
             env = dict(os.environ)
-            env['OMARCHY_MCP_SERVER_URL'] = mcp_url
+            env['SINGULARITY_MCP_SERVER_URL'] = mcp_url
             proc = await asyncio.create_subprocess_exec(
                 python_exec, dashboard_path,
                 stdout=asyncio.subprocess.PIPE,
@@ -762,7 +767,7 @@ class SingularityCLI:
 async def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
-        description="Omarchy - AI Code Agent CLI",
+        description="Singularity - AI Code Agent CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("prompt", nargs="*", help="Direct prompt (non-interactive)")
@@ -770,11 +775,11 @@ async def main():
     parser.add_argument("--startup-check-only", action="store_true", help="Start MCP server and exit (used in tests)")
     parser.add_argument("--startup-wait", type=int, default=0, help="When used with --startup-check-only, wait this many seconds before exiting")
     parser.add_argument("--no-startup-config", action="store_true", help="Skip interactive startup configuration prompts (for CI)")
-    parser.add_argument("--version", action="version", version="Omarchy 1.0.0")
+    parser.add_argument("--version", action="version", version="Singularity 1.0.0")
     
     args = parser.parse_args()
     
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
 
     # Support early CLI command: `omarchy config show` which should not trigger startup
     if args.prompt and len(args.prompt) >= 2 and args.prompt[0] == 'config' and args.prompt[1] == 'show':
@@ -831,8 +836,8 @@ async def main():
         # Do NOT stop the MCP server here; allow the user to continue into interactive mode
         # (previous behavior returned/exited after prompts which made the CLI appear to crash)
 
-    # Check if Ollama is running (skip when environment variable OMARCHY_SKIP_OLLAMA is set)
-    if not os.environ.get('OMARCHY_SKIP_OLLAMA'):
+    # Check if Ollama is running (skip when environment variable SINGULARITY_SKIP_OLLAMA is set)
+    if not os.environ.get('SINGULARITY_SKIP_OLLAMA'):
         try:
             result = subprocess.run(
                 ["curl", "-s", "http://localhost:11434/api/tags"],

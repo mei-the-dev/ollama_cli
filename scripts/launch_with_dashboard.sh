@@ -41,7 +41,7 @@ wait_for_mcp() {
 
 start_tmux_session() {
   # Create session with named windows for each service
-  tmux new-session -d -s "$OMARCHY_SESSION" -n "ollama" || true
+  tmux new-session -d -s "$SINGULARITY_SESSION" -n "ollama" || true
 
   if [[ "$SKIP_OLLAMA" != "1" ]]; then
     tmux send-keys -t "$OMARCHY_SESSION:ollama" "echo 'Starting Ollama serve...' && ollama serve 2>&1 | tee -a \"$LOG_DIR/ollama.log\"" C-m
@@ -110,7 +110,7 @@ if [[ "${1:-}" == "--wait-ready" ]]; then
 
   if wait_for_mcp 30; then
     tmux new-window -t "$OMARCHY_SESSION" -n "dashboard"
-    tmux send-keys -t "$OMARCHY_SESSION:dashboard" "echo 'Starting Dashboard...' && python3 $REPO_ROOT/ref/omarchy_dashboard.py" C-m
+    tmux send-keys -t "$SINGULARITY_SESSION:dashboard" "echo 'Starting Dashboard...' && python3 $REPO_ROOT/ref/singularity_dashboard.py" C-m
   else
     tmux new-window -t "$OMARCHY_SESSION" -n "dashboard"
     tmux send-keys -t "$OMARCHY_SESSION:dashboard" "echo 'MCP not ready — start dashboard manually after MCP is up'" C-m

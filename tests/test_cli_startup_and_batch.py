@@ -8,16 +8,31 @@ import urllib.request
 
 
 def test_cli_startup_and_batch_file_ops(tmp_path):
-    script = Path(sys.executable).resolve().parent.parent / 'bin' / 'omarchy'
-    # Fallback if not installed in virtualenv bin
-    if not script.exists():
-        script = Path('/usr/local/bin/omarchy')
-    assert script.exists(), f"omarchy executable not found at {script}"
+    # Look for either the new 'singularity' CLI wrapper or the legacy 'omarchy'
+    # Prefer the local repo CLI for deterministic tests; fallback to installed wrappers if not present
+    local_script = Path('./omarchy_cli.py')
+    if local_script.exists():
+        script_cmd = [sys.executable, str(local_script)]
+    else:
+        # Look for either the new 'singularity' CLI wrapper or the legacy 'omarchy'
+        script = Path(sys.executable).resolve().parent.parent / 'bin' / 'singularity'
+        # Fallback if not installed in virtualenv bin
+        if not script.exists():
+            script = Path('/usr/local/bin/singularity')
+        # Final fallback to legacy name for compatibility
+        if not script.exists():
+            script = Path(sys.executable).resolve().parent.parent / 'bin' / 'omarchy'
+        if not script.exists():
+            script = Path('/usr/local/bin/omarchy')
+        assert script.exists(), f"CLI executable not found at {script}"
+        script_cmd = [str(script)]
 
     env = os.environ.copy()
-    env['OMARCHY_SKIP_OLLAMA'] = '1'  # ensure we don't try to contact Ollama
+    # Set the new and legacy env var to be safe during transition
+    env['SINGULARITY_SKIP_OLLAMA'] = '1'
+    env['OMARCHY_SKIP_OLLAMA'] = '1'  # ensure backwards compatibility during rebrand
 
-    proc = subprocess.Popen([str(script), '--startup-check-only', '--startup-wait', '3'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    proc = subprocess.Popen(script_cmd + ['--startup-check-only', '--startup-wait', '3'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 
     host = None
     port = None

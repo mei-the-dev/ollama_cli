@@ -37,7 +37,7 @@ async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_execute_command_async(capsys):
-    cli = OmarchyCLI()
-    await cli.execute_command('echo hello-omarchy-test')
+    cli = SingularityCLI()
+    await cli.execute_command('echo hello-singularity-test')
     captured = capsys.readouterr()
-    assert 'hello-omarchy-test' in captured.out
+    assert 'hello-singularity-test' in captured.out

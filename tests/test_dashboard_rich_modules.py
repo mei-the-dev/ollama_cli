@@ -26,7 +26,7 @@ async def test_request_rate_module(monkeypatch):
         def get(self, url, timeout=None):
             return FakeResp(200, {'telemetry': {'reqs_last_minute': 120}})
 
-    monkeypatch.setenv('OMARCHY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
+    monkeypatch.setenv('SINGULARITY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
     monkeypatch.setattr('aiohttp.ClientSession', lambda: FakeSession())
 
     m = RequestRate()
@@ -66,7 +66,7 @@ async def test_latency_and_gpu_modules(monkeypatch):
         def get(self, url, timeout=None):
             return FakeResp(200, {'telemetry': {'p50_ms': 5.0, 'p95_ms': 10.0, 'avg_latency_ms': 6.0, 'gpu_memory_mb': 4096}})
 
-    monkeypatch.setenv('OMARCHY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
+    monkeypatch.setenv('SINGULARITY_MCP_SERVER_URL', 'http://127.0.0.1:35887')
     monkeypatch.setattr('aiohttp.ClientSession', lambda: FakeSession())
 
     lat = LatencyGraph()

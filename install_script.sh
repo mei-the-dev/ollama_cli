@@ -40,13 +40,13 @@ echo -e "${YELLOW}This may take several minutes (model is ~8GB)${NC}"
 ollama pull qwen2.5-coder:14b-instruct-q4_K_M
 
 # Create Omarchy directory
-OMARCHY_DIR="$HOME/.omarchy"
-echo -e "${CYAN}Creating Omarchy directory at ${OMARCHY_DIR}...${NC}"
-mkdir -p "$OMARCHY_DIR"
-mkdir -p "$OMARCHY_DIR/knowledge"
-mkdir -p "$OMARCHY_DIR/plans"
-mkdir -p "$OMARCHY_DIR/tools"
-mkdir -p "$OMARCHY_DIR/sessions"
+SINGULARITY_DIR="$HOME/.singularity"
+echo -e "${CYAN}Creating Singularity directory at ${SINGULARITY_DIR}...${NC}"
+mkdir -p "$SINGULARITY_DIR"
+mkdir -p "$SINGULARITY_DIR/knowledge"
+mkdir -p "$SINGULARITY_DIR/plans"
+mkdir -p "$SINGULARITY_DIR/tools"
+mkdir -p "$SINGULARITY_DIR/sessions"
 
 # Install Python dependencies
 echo -e "${CYAN}Installing Python dependencies...${NC}"

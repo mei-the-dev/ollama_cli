@@ -8,7 +8,7 @@ from omarchy_cli import SingularityCLI
 
 @pytest.mark.asyncio
 async def test_start_dashboard_with_tmux(monkeypatch, tmp_path):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
 
     # Monkeypatch shutil.which to pretend tmux exists
     import shutil
@@ -41,7 +41,7 @@ async def test_start_dashboard_with_tmux(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_start_dashboard_without_tmux(monkeypatch, tmp_path):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     calls = []
 
     import shutil
@@ -65,7 +65,7 @@ async def test_start_dashboard_without_tmux(monkeypatch, tmp_path):
 
 
 def test_help_includes_dashboard(capsys):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     # Capture console output
     cli.show_help()
     captured = capsys.readouterr()
@@ -75,7 +75,7 @@ def test_help_includes_dashboard(capsys):
 @pytest.mark.asyncio
 async def test_auto_launch_gui_terminal(monkeypatch, tmp_path):
     """When a GUI display is present and an emulator like alacritty exists, it should be launched and attach to tmux session."""
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     calls = []
 
     # Pretend tmux exists and alacritty exists
@@ -101,11 +101,11 @@ async def test_auto_launch_gui_terminal(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_preferred_terminal_env(monkeypatch, tmp_path):
     """Preferred terminal via ENV should be used when available."""
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     calls = []
 
     import shutil
-    monkeypatch.setenv('OMARCHY_PREFERRED_TERMINAL', 'alacritty')
+    monkeypatch.setenv('SINGULARITY_PREFERRED_TERMINAL', 'alacritty')
     monkeypatch.setenv('DISPLAY', ':0')
     monkeypatch.setattr(shutil, 'which', lambda name: '/usr/bin/tmux' if name == 'tmux' else ('/usr/bin/alacritty' if name == 'alacritty' else None))
 

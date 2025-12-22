@@ -8,5 +8,5 @@ def test_dashboard_file_exists():
 
 
 def test_dashboard_executable_flag():
-    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ref', 'omarchy_dashboard.py'))
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ref', 'singularity_dashboard.py'))
     assert os.access(path, os.X_OK) or os.stat(path).st_mode & 0o100, "Dashboard script is not executable (not required but recommended)"

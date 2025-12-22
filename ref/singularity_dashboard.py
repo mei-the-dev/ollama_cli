@@ -217,7 +217,8 @@ class SingularityDashboard(App):
             self.modules.append(inst)
 
     def _config_path(self):
-        return Path.home() / '.omarchy' / 'config.json'
+        # Prefer new dot folder; fallback logic can be added if needed
+        return Path.home() / '.singularity' / 'config.json'
 
     def _read_enabled_modules(self):
         # Check env var first

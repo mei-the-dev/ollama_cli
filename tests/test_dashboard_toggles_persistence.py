@@ -4,7 +4,7 @@ import pytest
 from ref.singularity_dashboard import SingularityDashboard
 
 def read_config():
-    p = Path.home() / '.omarchy' / 'config.json'
+    p = Path.home() / '.singularity' / 'config.json'
     if not p.exists():
         return {}
     return json.loads(p.read_text())
@@ -13,7 +13,7 @@ def read_config():
 async def test_enable_disable_persistence(tmp_path, monkeypatch):
     # Use temp HOME so we don't overwrite user's config
     monkeypatch.setenv('HOME', str(tmp_path))
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     app.register_modules()
     # Ensure module exists
     assert any(m._module_name == 'req_rate' for m in app.modules)
@@ -30,7 +30,7 @@ async def test_enable_disable_persistence(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_disable_unmounts(monkeypatch, tmp_path):
     monkeypatch.setenv('HOME', str(tmp_path))
-    app = OmarchyDashboard()
+    app = SingularityDashboard()
     app.register_modules()
     app.mount_modules()
     # ensure mounted

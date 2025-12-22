@@ -123,6 +123,9 @@ def test_execute_code_echo(mcp):
 def test_http_call_endpoint(tmp_path):
     # Start server as subprocess and call write_code/read_code via HTTP
     script = Path.home() / '.singularity' / 'mcp_server.py'
+    # Fallback to the repository copy if no home copy exists (makes tests deterministic)
+    if not script.exists():
+        script = Path('./mcp_server.py')
     proc = subprocess.Popen([sys.executable, str(script), '--host', '127.0.0.1', '--port', '0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     host = None
     port = None
