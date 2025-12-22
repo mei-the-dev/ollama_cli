@@ -922,6 +922,166 @@ class SingularityCLI:
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
 
+    def show_help(self):
+        """Display help with available commands"""
+        help_table = Table(title="Help", show_header=False)
+        commands = [
+            ("/mode <name>", "Switch modes"),
+            ("/new", "Start a new conversation"),
+            ("/plan", "View current plan"),
+            ("/exec <cmd>", "Execute a shell command"),
+            ("/dashboard", "Launch the dashboard"),
+            ("/config show", "Show effective configuration (env + ~/.singularity/config.json)"),
+            ("/help", "Show this help"),
+            ("/exit", "Exit Singularity")
+        ]
+        for cmd, desc in commands:
+            help_table.add_row(cmd, desc)
+        console.print(help_table)
+
+    def show_modes(self):
+        """Display available modes"""
+        modes_table = Table(title="Available Modes", show_header=True, header_style="bold cyan")
+        modes_table.add_column("Mode", style="cyan", width=15)
+        modes_table.add_column("Description", style="white")
+        for mode, desc in self.modes.items():
+            modes_table.add_row(mode, desc)
+        console.print(modes_table)
+
+    async def process_prompt(self, prompt: str, mode: str):
+        """Process prompt based on current mode"""
+        mode_prompts = {
+            "chat": f"User query: {prompt}",
+            "code": f"Generate code for: {prompt}. Provide complete, production-ready code with comments.",
+            "plan": f"Create a detailed implementation plan for: {prompt}. Break it into actionable steps.",
+            "batch": f"Generate multiple files for: {prompt}. Create all necessary files and structure.",
+            "learn": f"Research and learn about: {prompt}. Save findings to knowledge base.",
+            "analyze": f"Analyze the codebase focusing on: {prompt}. Provide insights and recommendations."
+        }
+
+        # Build a tool-aware system prompt instructing the model to emit JSON tool calls when needed
+        tool_prompt = (
+            f"{self.agent.model} system: If you need to perform actions like writing files or running shell commands, "
+            "output a single JSON object and nothing else with the structure: {\"tool\": \"name\", \"args\": {...}}. "
+            "For file creation/modification use tool \"write_code\" with args {\"filepath\": \"/path\", \"content\": \"...\", \"mode\": \"overwrite\"}. "
+            "Available tools: write_code, apply_edit, refactor_code, search_files, fetch_url, execute_code, git_operation."
+        )
+        full_prompt = mode_prompts.get(mode, prompt)
+        await self.agent.execute_with_animation(full_prompt, f"Processing in {mode} mode", system=tool_prompt)
+
+    def get_effective_config(self) -> Dict:
+        """Return the effective configuration merging environment variables and ~/.singularity/config.json (with ~/.omarchy fallback)"""
+        singularity_cfg = Path.home() / '.singularity' / 'config.json'
+        omarchy_cfg = Path.home() / '.omarchy' / 'config.json'
+        file_cfg = {}
+        try:
+            if singularity_cfg.exists():
+                file_cfg = json.loads(singularity_cfg.read_text())
+            elif omarchy_cfg.exists():
+                file_cfg = json.loads(omarchy_cfg.read_text())
+        except Exception:
+            logger.exception('Failed to read config file')
+
+        def env_bool(key, default=False):
+            v = os.environ.get(key)
+            if v is None:
+                return file_cfg.get(key.lower(), default)
+            return v.lower() in ('1', 'true', 'yes', 'on')
+
+        conf = {
+            'allow_sudo': env_bool('SINGULARITY_ALLOW_SUDO', file_cfg.get('allow_sudo', False) or env_bool('OMARCHY_ALLOW_SUDO', False)),
+            'auto_apply': env_bool('SINGULARITY_AUTO_APPLY', file_cfg.get('auto_apply', False) or env_bool('OMARCHY_AUTO_APPLY', False)),
+            'skip_ollama': env_bool('SINGULARITY_SKIP_OLLAMA', False) or env_bool('OMARCHY_SKIP_OLLAMA', False),
+            'model': os.environ.get('SINGULARITY_MODEL', os.environ.get('OMARCHY_MODEL', file_cfg.get('model', self.agent.model))),
+            'mcp_server_url': getattr(self.agent, 'mcp_server_url', None) or os.environ.get('SINGULARITY_MCP_SERVER_URL') or os.environ.get('OMARCHY_MCP_SERVER_URL'),
+            'preferred_terminal': os.environ.get('SINGULARITY_PREFERRED_TERMINAL', file_cfg.get('preferred_terminal') or os.environ.get('OMARCHY_PREFERRED_TERMINAL'))
+        }
+        return conf
+
+    def show_config_table(self):
+        """Print config in a human-friendly table"""
+        conf = self.get_effective_config()
+        table = Table(title="Current Configuration", show_header=True)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", style="white")
+        for k, v in conf.items():
+            table.add_row(k, str(v))
+        console.print(table)
+
+    def print_config_json(self):
+        conf = self.get_effective_config()
+        print(json.dumps(conf, indent=2))
+
+    async def execute_command(self, cmd: str):
+        """Execute shell command asynchronously with animation and logging"""
+        with console.status(f"[cyan]Executing: {cmd}[/cyan]", spinner="dots"):
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                try:
+                    out_bytes, err_bytes = await asyncio.wait_for(proc.communicate(), timeout=30)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    console.print("[red]Error: command timed out after 30s[/red]")
+                    logger.warning('execute_command timeout: %s', cmd)
+                    return
+                out = out_bytes.decode(errors='replace') if out_bytes else ''
+                err = err_bytes.decode(errors='replace') if err_bytes else ''
+                if out:
+                    console.print(Panel(out, title="Output", border_style="green"))
+                if err:
+                    console.print(Panel(err, title="Errors", border_style="red"))
+                logger.info('execute_command finished: %s (rc=%s)', cmd, proc.returncode)
+            except Exception as e:
+                logger.exception('execute_command error')
+                console.print(f"[red]Error executing command: {e!r}[/red]")
+
+    async def start_dashboard(self):
+        """Start the dashboard UI.
+
+        - If `tmux` is available, spawn a new tmux window named `dashboard-<ts>` and run the dashboard there.
+        - Otherwise, start the dashboard as a background Python process and write logs to ./logs/dashboard.log
+        """
+        import time
+        dashboard_path = os.path.join(os.path.dirname(__file__), 'ref', 'singularity_dashboard.py')
+
+        # Ensure log dir exists
+        log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        dashboard_log = os.path.join(log_dir, 'dashboard.log')
+
+        tmux_path = shutil.which('tmux')
+        window_name = f"dashboard-{int(time.time())}"
+        python_exec = sys.executable
+
+        # Prepare MCP server URL to pass into the dashboard
+        mcp_url = getattr(self.agent, 'mcp_server_url', None) or os.environ.get('SINGULARITY_MCP_SERVER_URL') or os.environ.get('OMARCHY_MCP_SERVER_URL') or 'http://127.0.0.1:8000'
+
+        if tmux_path:
+            # If we're already inside tmux, create a new window in the current session so the user sees it.
+            if 'TMUX' in os.environ:
+                shell_cmd = f"OMARCHY_MCP_SERVER_URL='{mcp_url}' exec {python_exec} {dashboard_path}"
+                cmd = [tmux_path, 'new-window', '-n', window_name, 'bash', '-lc', shell_cmd]
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                console.print(f"[green]Dashboard launched in new tmux window '{window_name}' (pid: {proc.pid}).[/green]")
+            else:
+                session_name = os.environ.get('SINGULARITY_SESSION', 'singularity')
+                shell_cmd = f"OMARCHY_MCP_SERVER_URL='{mcp_url}' exec {python_exec} {dashboard_path}"
+                cmd = [tmux_path, 'new-session', '-d', '-s', session_name, '-n', window_name, 'bash', '-lc', shell_cmd]
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                console.print(f"[green]Dashboard launched in tmux session '{session_name}', window '{window_name}' (pid: {proc.pid}). Attach with: tmux attach -t {session_name}[/green]")
+
+        else:
+            # Start a background process logging to file
+            cmd = [python_exec, dashboard_path]
+            with open(dashboard_log, 'ab') as fh:
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=fh, stderr=fh)
+            console.print(f"[green]Dashboard started as background process (pid: {proc.pid}). Logs: {dashboard_log}[/green]")
+
 # Attach existing module-level helper functions to SingularityCLI so they behave as instance methods
 for _name in ('startup_config_prompt', 'interactive_mode', 'process_prompt', 'get_effective_config', 'show_config_table', 'print_config_json', 'execute_command', 'start_dashboard'):
     if _name in globals():
