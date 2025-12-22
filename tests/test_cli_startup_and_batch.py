@@ -10,7 +10,11 @@ import urllib.request
 def test_cli_startup_and_batch_file_ops(tmp_path):
     # Look for either the new 'singularity' CLI wrapper or the legacy 'omarchy'
     # Prefer the local repo CLI for deterministic tests; fallback to installed wrappers if not present
-    local_script = Path('./omarchy_cli.py')
+    # Prefer local repo CLI (singularity or legacy omarchy) for deterministic tests
+    local_script = Path('./singularity_cli.py')
+    if not local_script.exists():
+        local_script = Path('./omarchy_cli.py')
+
     if local_script.exists():
         script_cmd = [sys.executable, str(local_script)]
     else:

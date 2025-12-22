@@ -1,202 +1,37 @@
 #!/usr/bin/env python3
-"""
-Omarchy CLI - Beautiful Code Agent Interface
-Powered by Ollama Qwen2.5-Coder with MCP Tools
+"""Compatibility shim for the rebrand to Singularity.
+
+This module keeps the legacy module name `omarchy_cli` available for imports and
+for users who still call the old script name. It re-exports the new API from
+`singularity_cli.py` and prints a deprecation notice when executed directly.
 """
 
-import asyncio
-import json
-import os
-import sys
-import time
+import warnings
 from pathlib import Path
-from typing import List, Dict, Optional
-import subprocess
-import shutil
-import argparse
-from datetime import datetime
-import logging
-import getpass
-import aiohttp
+import sys
+import asyncio
 
+# Import everything from the new module and provide legacy aliases
 try:
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.columns import Columns
-    from rich.prompt import Prompt, Confirm
-    from rich.table import Table
-    from rich.live import Live
-    from rich.markdown import Markdown
-except ImportError:
-    print("Installing required dependencies...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "rich"], check=True)
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.columns import Columns
-    from rich.prompt import Prompt, Confirm
-    from rich.table import Table
-    from rich.live import Live
-    from rich.markdown import Markdown
+    from singularity_cli import *  # noqa: F401,F403
+except Exception:
+    # If the new module isn't importable, raise a helpful error
+    raise
 
-console = Console()
+# Provide backward-compatible names
+OmarchyAgent = SingularityAgent  # type: ignore[name-defined]
+OmarchyCLI = SingularityCLI  # type: ignore[name-defined]
 
-# Setup a simple file logger for non-interactive/plain logs
-logger = logging.getLogger('omarchy')
-if not logger.handlers:
+if __name__ == "__main__":
+    warnings.warn("The 'omarchy' command and API are deprecated; please use 'singularity' instead.", DeprecationWarning)
     try:
-        log_dir = Path(__file__).parent / 'logs'
-        log_dir.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(log_dir / 'omarchy.log')
-        fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
-        logger.addHandler(fh)
-        logger.setLevel(logging.INFO)
-    except Exception:
-        pass
-
-
-# ASCII Art Banner
-BANNER = """
-[bold magenta]
-    ╔═╗┬ ┬┌─┐┌─┐┌─┐┬ ┬  ╔═╗┬ ┬┌─┐┬  ┬
-    ╚═╗└┬┘├┤ ├─┘├┤ │││  ║  ├─┤├┤ └┐┌┘
-    ╚═╝ ┴ └─┘┴  └  └┴┘  ╚═╝┴ ┴└─┘ └┘
-[/bold magenta]
-[bold cyan]Singularity — Artistic Code Agent[/bold cyan]
-[dim]🔮 Powered by Qwen2.5-Coder 14B via Ollama | Use @web, @file, @diff, @tree for Context Providers[/dim]
-"""
-
-THINKING_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-CODE_FRAMES = ["◐", "◓", "◑", "◒"]
-COMPLETE_SYMBOL = "✓"
-ERROR_SYMBOL = "✗"
-
-
-class SingularityAgent:
-    def __init__(self):
-        self.model = "qwen2.5-coder:14b-instruct-q4_K_M"
-        self.mcp_server_path = Path.home() / ".singularity" / "mcp_server.py"
-        self.conversation_history = []
-        self.current_plan = None
-        
-    async def start_mcp_server(self, timeout: float = 5.0):
-        """Start the MCP server process and wait for it to announce a listening port."""
-        if not self.mcp_server_path.exists():
-            # Fallback: if there's a copy of mcp_server.py in the repository, use it (useful for tests/local dev)
-            repo_path = Path(__file__).resolve().parents[0] / 'mcp_server.py'
-            if repo_path.exists():
-                self.mcp_server_path = repo_path
-            else:
-                console.print("[yellow]MCP server not found. Please install it first (or copy mcp_server.py to ~/.singularity/).[/yellow]")
-                return None
-
+        asyncio.run(main())
+    except KeyboardInterrupt:
         try:
-            process = await asyncio.create_subprocess_exec(
-                sys.executable,
-                str(self.mcp_server_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            # Read stdout lines until we get the listening announcement or timeout
-            port = None
-            start = asyncio.get_event_loop().time()
-            while True:
-                if process.stdout.at_eof():
-                    break
-                try:
-                    line = await asyncio.wait_for(process.stdout.readline(), timeout=timeout)
-                except asyncio.TimeoutError:
-                    break
-                if not line:
-                    break
-                text = line.decode(errors="replace").strip()
-                if text:
-                    console.print(f"[dim]{text}[/dim]")
-                if "MCP server listening on" in text:
-                    # parse host:port
-                    parts = text.split()
-                    hostport = parts[-1]
-                    if ':' in hostport:
-                        host, port_s = hostport.split(':')
-                        try:
-                            port = int(port_s)
-                            self.mcp_server_url = f"http://{host}:{port}"
-                        except ValueError:
-                            pass
-                    break
-                if (asyncio.get_event_loop().time() - start) > timeout:
-                    break
+            console.print("\n[yellow]Goodbye![/yellow]")
+        except Exception:
+            pass
 
-            self.mcp_process = process
-            if port:
-                console.print(f"[green]MCP server running at {self.mcp_server_url}[/green]")
-                logger.info('MCP server running at %s', self.mcp_server_url)
-            else:
-                console.print("[yellow]MCP server started but did not report port within timeout[/yellow]")
-                logger.warning('MCP server started but did not report port within timeout')
-            return process
-        except Exception as e:
-            console.print(f"[red]Failed to start MCP server: {e}[/red]")
-            return None
-
-    async def stop_mcp_server(self):
-        """Stop the running MCP server process if any."""
-        proc = getattr(self, 'mcp_process', None)
-        if proc and proc.returncode is None:
-            try:
-                proc.terminate()
-                await asyncio.wait_for(proc.wait(), timeout=3)
-                console.print("[green]MCP server stopped[/green]")
-            except Exception:
-                proc.kill()
-                console.print("[red]MCP server killed[/red]")
-            finally:
-                self.mcp_process = None
-                self.mcp_server_url = None
-    
-    async def call_ollama(self, prompt: str, system: Optional[str] = None, tools: Optional[List[Dict]] = None):
-        """Call Ollama with streaming support"""
-        messages = self.conversation_history.copy()
-        messages.append({"role": "user", "content": prompt})
-        
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": True
-        }
-        
-        if system:
-            payload["system"] = system
-        
-        if tools:
-            payload["tools"] = tools
-        
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "curl",
-                "-X", "POST",
-                "http://localhost:11434/api/chat",
-                "-H", "Content-Type: application/json",
-                "-d", json.dumps(payload),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            full_response = ""
-            tool_calls = []
-            
-            async for line in process.stdout:
-                if line:
-                    try:
-                        chunk = json.loads(line.decode())
-                        if "message" in chunk:
-                            content = chunk["message"].get("content", "")
-                            if content:
-                                full_response += content
-                                yield {"type": "content", "data": content}
-                            
-                            # Check for tool calls
-                            if "tool_calls" in chunk["message"]:
-                                tool_calls.extend(chunk["message"]["tool_calls"])
                         
                         if chunk.get("done"):
                             break

@@ -87,7 +87,7 @@ start_background_processes() {
   fi
 
   echo "Starting CLI (omarchy) and dashboard in background logs..."
-  (echo "Starting CLI..."; (command -v singularity >/dev/null 2>&1 && exec singularity) || python3 "$REPO_ROOT/omarchy_cli.py") >>"$LOG_DIR/cli.log" 2>&1 &
+  (echo "Starting CLI..."; (command -v singularity >/dev/null 2>&1 && exec singularity) || python3 "$REPO_ROOT/singularity_cli.py") >>"$LOG_DIR/cli.log" 2>&1 &
   (echo "Starting Dashboard..."; python3 "$REPO_ROOT/ref/singularity_dashboard.py") >>"$LOG_DIR/dashboard.log" 2>&1 &
   echo "CLI log: $LOG_DIR/cli.log"
   echo "Dashboard log: $LOG_DIR/dashboard.log"
@@ -98,14 +98,14 @@ if [[ "${1:-}" == "--wait-ready" ]]; then
   if [[ "$SKIP_OLLAMA" != "1" ]]; then
     if wait_for_http "http://localhost:11434/api/tags" 30; then
       tmux new-window -t "$OMARCHY_SESSION" -n "cli"
-      tmux send-keys -t "$SINGULARITY_SESSION:cli" "echo 'Starting CLI...' && (command -v singularity >/dev/null 2>&1 && exec singularity) || python3 $REPO_ROOT/omarchy_cli.py" C-m
+      tmux send-keys -t "$SINGULARITY_SESSION:cli" "echo 'Starting CLI...' && (command -v singularity >/dev/null 2>&1 && exec singularity) || python3 $REPO_ROOT/singularity_cli.py" C-m
     else
       tmux new-window -t "$OMARCHY_SESSION" -n "cli"
       tmux send-keys -t "$OMARCHY_SESSION:cli" "echo 'Ollama not ready — you can start the CLI manually'" C-m
     fi
   else
     tmux new-window -t "$OMARCHY_SESSION" -n "cli"
-    tmux send-keys -t "$OMARCHY_SESSION:cli" "echo 'SKIP_OLLAMA set — starting CLI' && (command -v omarchy >/dev/null 2>&1 && exec omarchy) || python3 $REPO_ROOT/omarchy_cli.py" C-m
+    tmux send-keys -t "$OMARCHY_SESSION:cli" "echo 'SKIP_OLLAMA set — starting CLI' && (command -v singularity >/dev/null 2>&1 && exec singularity) || python3 $REPO_ROOT/singularity_cli.py" C-m
   fi
 
   if wait_for_mcp 30; then
