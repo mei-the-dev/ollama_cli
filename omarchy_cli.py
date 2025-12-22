@@ -626,7 +626,8 @@ class OmarchyCLI:
             'auto_apply': env_bool('OMARCHY_AUTO_APPLY', file_cfg.get('auto_apply', False)),
             'skip_ollama': env_bool('OMARCHY_SKIP_OLLAMA', False),
             'model': os.environ.get('OMARCHY_MODEL', file_cfg.get('model', self.agent.model)),
-            'mcp_server_url': getattr(self.agent, 'mcp_server_url', None)
+            'mcp_server_url': getattr(self.agent, 'mcp_server_url', None),
+            'preferred_terminal': os.environ.get('OMARCHY_PREFERRED_TERMINAL', file_cfg.get('preferred_terminal'))
         }
         return conf
 
@@ -687,16 +688,54 @@ class OmarchyCLI:
         dashboard_log = os.path.join(log_dir, 'dashboard.log')
 
         tmux_path = shutil.which('tmux')
+        window_name = f"dashboard-{int(time.time())}"
+        python_exec = sys.executable
+
         if tmux_path:
-            # Always create a fresh window with a unique name to avoid collisions
-            window_name = f"dashboard-{int(time.time())}"
-            cmd = [tmux_path, 'new-window', '-n', window_name, 'python3', dashboard_path]
-            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-            console.print(f"[green]Dashboard launched in new tmux window '{window_name}' (pid: {proc.pid}).[/green]")
+            # If we're already inside tmux, create a new window in the current session so the user sees it.
+            if 'TMUX' in os.environ:
+                cmd = [tmux_path, 'new-window', '-n', window_name, python_exec, dashboard_path]
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                console.print(f"[green]Dashboard launched in new tmux window '{window_name}' (pid: {proc.pid}).[/green]")
+            else:
+                # Create a named detached session 'omarchy' (or add a window to it if it exists)
+                session_name = 'omarchy'
+                # Start a detached session with the dashboard in a named window
+                cmd = [tmux_path, 'new-session', '-d', '-s', session_name, '-n', window_name, python_exec, dashboard_path]
+                proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                console.print(f"[green]Dashboard launched in tmux session '{session_name}', window '{window_name}' (pid: {proc.pid}). Attach with: tmux attach -t {session_name}[/green]")
+
+                # If a graphical display is available, try to auto-open a terminal emulator attached to the tmux session
+                if os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'):
+                    # Candidate emulators (in order of preference)
+                    emulators = [
+                        ('alacritty', lambda e, s: [e, '-e', 'tmux', 'attach', '-t', s]),
+                        ('kitty', lambda e, s: [e, '-e', 'tmux', 'attach', '-t', s]),
+                        ('gnome-terminal', lambda e, s: [e, '--', 'bash', '-lc', f'tmux attach -t {s}; exec bash']),
+                        ('konsole', lambda e, s: [e, '-e', 'tmux', 'attach', '-t', s]),
+                        ('xfce4-terminal', lambda e, s: [e, '-e', f'tmux attach -t {s}']),
+                        ('x-terminal-emulator', lambda e, s: [e, '-e', 'tmux', 'attach', '-t', s]),
+                        ('mate-terminal', lambda e, s: [e, '-e', 'tmux', 'attach -t ' + s]),
+                        ('terminator', lambda e, s: [e, '-e', f'tmux attach -t {s}']),
+                    ]
+                    for name, make_args in emulators:
+                        em_path = shutil.which(name)
+                        if em_path:
+                            try:
+                                em_cmd = make_args(em_path, session_name)
+                                # Spawn the GUI terminal to attach to the tmux session
+                                await asyncio.create_subprocess_exec(*em_cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+                                console.print(f"[green]Opened {name} and attached to tmux session '{session_name}'.[/green]")
+                                break
+                            except Exception:
+                                # If launching the emulator fails, continue to the next one
+                                continue
+                else:
+                    console.print('[dim]No graphical display detected; not opening a terminal emulator automatically.[/dim]')
         else:
-            # Start background process and detach
+            # Start background process and detach using the same Python interpreter as the CLI
             proc = await asyncio.create_subprocess_exec(
-                'python3', dashboard_path,
+                python_exec, dashboard_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
