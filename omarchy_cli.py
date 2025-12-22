@@ -18,6 +18,7 @@ import argparse
 try:
     from rich.console import Console
     from rich.panel import Panel
+    from rich.columns import Columns
     from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.prompt import Prompt, Confirm
     from rich.syntax import Syntax
@@ -30,6 +31,7 @@ except ImportError:
     subprocess.run([sys.executable, "-m", "pip", "install", "rich"], check=True)
     from rich.console import Console
     from rich.panel import Panel
+    from rich.columns import Columns
     from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.prompt import Prompt, Confirm
     from rich.syntax import Syntax
@@ -749,17 +751,15 @@ async def main():
             await cli.startup_config_prompt()
         except Exception as e:
             console.print(f"[yellow]Startup config prompts skipped: {e}[/yellow]")
+        # If user asked to wait briefly after configuration, honor that, but continue to the interactive CLI
         if args.startup_wait and args.startup_wait > 0:
-            console.print(f"[cyan]Waiting for {args.startup_wait}s before shutdown...[/cyan]")
+            console.print(f"[cyan]Waiting for {args.startup_wait}s before continuing...[/cyan]")
             try:
                 await asyncio.sleep(args.startup_wait)
             except Exception:
                 pass
-        try:
-            await cli.agent.stop_mcp_server()
-        except Exception:
-            pass
-        return
+        # Do NOT stop the MCP server here; allow the user to continue into interactive mode
+        # (previous behavior returned/exited after prompts which made the CLI appear to crash)
 
     # Check if Ollama is running (skip when environment variable OMARCHY_SKIP_OLLAMA is set)
     if not os.environ.get('OMARCHY_SKIP_OLLAMA'):
