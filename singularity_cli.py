@@ -771,6 +771,162 @@ class SingularityCLI:
         # Subtle divider
         console.rule('[dim]Ready — Ask me to generate code, suggest edits, or explore the repo[/dim]')
 
+    async def startup_config_prompt(self):
+        """Interactive prompts at startup to transfer knowledge/context and optionally enable auto-apply and sudo."""
+        # Skip prompts if not attached to a TTY (non-interactive environment)
+        # Allow tests (pytest) to run prompts even when not a TTY by checking test env.
+        if not sys.stdin.isatty() and not os.environ.get('PYTEST_CURRENT_TEST'):
+            console.print("[yellow]Non-interactive environment detected; skipping startup prompts.[/yellow]")
+            return
+
+        # Transfer knowledge
+        try:
+            if Confirm.ask("Transfer local knowledge to the model's system prompt (recommended)?"):
+                kb_dir = Path.home() / '.singularity' / 'knowledge'
+                if kb_dir.exists():
+                    entries = []
+                    for f in list(kb_dir.glob('*.json'))[:20]:
+                        try:
+                            j = json.loads(f.read_text())
+                            entries.append(f"{j.get('topic')}: { (j.get('content','')[:300] + '...') if len(j.get('content',''))>300 else j.get('content','') }")
+                        except Exception:
+                            continue
+                    if entries:
+                        sys_msg = "Knowledge Summary:\n" + "\n".join(entries[:10])
+                        # Insert as a system message at the start of conversation history
+                        self.agent.conversation_history.insert(0, {"role": "system", "content": sys_msg})
+                        console.print("[green]Knowledge summary loaded into the agent context.[/green]")
+        except Exception:
+            console.print("[yellow]Skipping knowledge transfer (non-interactive environment).[/yellow]")
+
+        # Transfer context
+        try:
+            if Confirm.ask("Transfer conversation context (context.json) to the model? "):
+                ctx_file = Path.home() / '.singularity' / 'context' / 'context.json'
+                if ctx_file.exists():
+                    try:
+                        ctx = json.loads(ctx_file.read_text())
+                        ctx_text = '\n'.join([c.get('content','') for c in ctx][-20:])
+                        self.agent.conversation_history.insert(0, {"role": "system", "content": "Conversation context:\n" + ctx_text})
+                        console.print("[green]Conversation context injected.[/green]")
+                    except Exception:
+                        console.print("[yellow]Failed to load context file.[/yellow]")
+        except Exception:
+            console.print("[yellow]Skipping context transfer (non-interactive environment).[/yellow]")
+
+        # Auto-apply writes
+        try:
+            if Confirm.ask("Enable auto-approval for file writes (auto-apply)? This will allow the CLI to apply agent-suggested file writes without prompting."):
+                cfg_path = Path.home() / '.singularity' / 'config.json'
+                try:
+                    cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+                except Exception:
+                    cfg = {}
+                cfg['auto_apply'] = True
+                cfg_path.parent.mkdir(parents=True, exist_ok=True)
+                cfg_path.write_text(json.dumps(cfg, indent=2))
+                os.environ['SINGULARITY_AUTO_APPLY'] = '1'
+                self.auto_apply = True
+                console.print('[green]Auto-apply enabled.[/green]')
+        except Exception:
+            console.print('[yellow]Skipping auto-apply configuration.[/yellow]')
+
+        # Sudo privileges
+        try:
+            if Confirm.ask("Enable sudo privileges for MCP server tools? (This allows the server to run sudo commands.)"):
+                cfg_path = Path.home() / '.singularity' / 'config.json'
+                try:
+                    cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+                except Exception:
+                    cfg = {}
+                cfg['allow_sudo'] = True
+                cfg_path.parent.mkdir(parents=True, exist_ok=True)
+                cfg_path.write_text(json.dumps(cfg, indent=2))
+                # Optionally ask for password to store for this session only
+                if Confirm.ask('Store sudo password for this session to allow non-interactive sudo?'):
+                    try:
+                        pw = getpass.getpass('Enter sudo password (stored only in memory for this session): ')
+                        self.sudo_password = pw
+                        console.print('[green]Sudo password stored for session.[/green]')
+                    except Exception:
+                        console.print('[yellow]Could not read password; sudo will use non-interactive mode and may fail if password required.[/yellow]')
+                console.print('[green]Sudo enabled in config. You can disable it later at ~/.singularity/config.json[/green]')
+        except Exception:
+            console.print('[yellow]Skipping sudo configuration.[/yellow]')
+
+    async def interactive_mode(self):
+        """Main interactive loop"""
+        self.show_banner()
+        
+        current_mode = "chat"
+        
+        while True:
+            try:
+                # Beautiful prompt
+                prompt = Prompt.ask(
+                    f"\n[bold cyan]singularity[/bold cyan] [[{current_mode}]]"
+                )
+                
+                if not prompt:
+                    continue
+                
+                # Handle commands
+                if prompt.startswith("/"):
+                    parts = prompt.split(maxsplit=1)
+                    cmd = parts[0]
+                    args = parts[1] if len(parts) > 1 else ""
+                    
+                    if cmd == "/exit":
+                        console.print("[yellow]Goodbye! Happy coding! 👋[/yellow]")
+                        break
+                    elif cmd == "/help":
+                        self.show_help()
+                    elif cmd == "/mode":
+                        if args in self.modes:
+                            current_mode = args
+                            console.print(f"[green]Switched to {current_mode} mode[/green]")
+                        else:
+                            self.show_modes()
+                    elif cmd == "/new":
+                        self.agent.conversation_history = []
+                        console.print("[green]New conversation started[/green]")
+                    elif cmd == "/plan":
+                        if self.agent.current_plan:
+                            self.agent.display_plan(self.agent.current_plan)
+                        else:
+                            console.print("[yellow]No active plan[/yellow]")
+                    elif cmd == "/exec":
+                        await self.execute_command(args)
+                    elif cmd == "/dashboard":
+                        # Launch dashboard in a separate process or tmux window
+                        try:
+                            await self.start_dashboard()
+                        except Exception as e:
+                            console.print(f"[red]Failed to start dashboard: {e}[/red]")
+                    elif cmd == "/config":
+                        sub = args.strip().split() if args else []
+                        if len(sub) >= 1 and sub[0] == 'show':
+                            self.show_config_table()
+                        else:
+                            console.print("[yellow]Usage: /config show[/yellow]")
+                    else:
+                        console.print(f"[red]Unknown command: {cmd}[/red]")
+                    
+                    continue
+                
+                # Process based on mode
+                await self.process_prompt(prompt, current_mode)
+                
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Use /exit to quit[/yellow]")
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+
+# Attach existing module-level helper functions to SingularityCLI so they behave as instance methods
+for _name in ('startup_config_prompt', 'interactive_mode', 'process_prompt', 'get_effective_config', 'show_config_table', 'print_config_json', 'execute_command', 'start_dashboard'):
+    if _name in globals():
+        setattr(SingularityCLI, _name, globals()[_name])
+
 async def main():
     """Main entry point"""
     # Ensure child Python processes use unbuffered stdout so their prints are readable by parent processes
