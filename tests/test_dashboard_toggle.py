@@ -1,0 +1,14 @@
+import pytest
+from ref.omarchy_dashboard import OmarchyDashboard
+
+@pytest.mark.asyncio
+async def test_toggle_log_state():
+    app = OmarchyDashboard()
+    app.register_modules()
+    app.mount_modules()
+    # initial state should be not collapsed
+    assert not getattr(app, 'log_collapsed', False)
+    app.toggle_log()
+    assert app.log_collapsed is True
+    app.toggle_log()
+    assert app.log_collapsed is False

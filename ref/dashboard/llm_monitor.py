@@ -42,6 +42,11 @@ class LLMMonitor(BaseModule):
                     is_up = r.status == 200
                     self.widget.set_status(is_up)
                     try:
+                        if self.app:
+                            self.app.set_kpi('#kpi-ollama', f"Ollama: {'ONLINE' if is_up else 'OFFLINE'}\nPort: 11434")
+                    except Exception:
+                        pass
+                    try:
                         if is_up and self.app:
                             self.app.query_one("#sys-log").write("Ollama: OK")
                     except Exception:

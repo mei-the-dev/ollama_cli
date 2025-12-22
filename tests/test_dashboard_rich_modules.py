@@ -36,6 +36,15 @@ async def test_request_rate_module(monkeypatch):
     await m.do_check()
     assert len(m.widget.history) >= 1
 
+    # Ensure dashboard quickly registers and mounts modules into KPI slots
+    from ref.omarchy_dashboard import OmarchyDashboard
+    app = OmarchyDashboard()
+    app.register_modules()
+    app.mount_modules()
+    assert hasattr(app, '_widget_registry')
+    assert any(hasattr(w, 'update') for w in app._widget_registry)
+
+
 @pytest.mark.asyncio
 async def test_latency_and_gpu_modules(monkeypatch):
     class FakeResp:

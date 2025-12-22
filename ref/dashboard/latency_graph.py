@@ -42,9 +42,18 @@ class LatencyGraph(BaseModule):
                         p95 = tele.get('p95_ms') or 0.0
                         avg = tele.get('avg_latency_ms') or 0.0
                         self.widget.set_latency(p50, p95, avg)
+                        if self.app:
+                            try:
+                                self.app.set_kpi('#kpi-lat', f"Latency: p50={p50:.1f}ms p95={p95:.1f}ms")
+                            except Exception:
+                                pass
         except Exception:
             self.widget.set_latency(0.0, 0.0, 0.0)
-
+            if self.app:
+                try:
+                    self.app.set_kpi('#kpi-lat', "Latency: --")
+                except Exception:
+                    pass
     @work(exclusive=True)
     async def _check(self):
         await self.do_check()

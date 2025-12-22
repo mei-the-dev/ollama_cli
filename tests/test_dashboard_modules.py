@@ -52,6 +52,13 @@ async def test_mcp_env_passed_to_dashboard(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_modules_mounted_into_kpi(monkeypatch):
     app = OmarchyDashboard()
-    app.on_mount()
+    # Explicit registration and mounting for tests (UI might be headless)
+    app.register_modules()
+    app.mount_modules()
     # Ensure modules list populated
     assert len(app.modules) >= 2
+    # Ensure widget registry exists and includes widgets for modules
+    assert hasattr(app, '_widget_registry') and len(app._widget_registry) >= len(app.modules)
+    for mod in app.modules:
+        assert hasattr(mod, 'widget')
+

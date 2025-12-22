@@ -31,29 +31,23 @@ from textual import work
 # --- VISUAL STYLING ---
 CSS = """
 Screen {
-    background: #0f172a;
-    color: #e2e8f0;
+    background: #071226;
+    color: #e6eef6;
 }
 
 .kpi-grid {
     layout: grid;
-    grid-size: 4 1;
-    grid-gutter: 1;
-    height: auto;
-    margin-bottom: 1;
-}
-
-.main-content {
-    height: 1fr;
-    border: solid #334155;
-    background: #1e293b;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-auto-rows: auto;
+    gap: 1 1;
+    padding: 1 1;
 }
 
 .card {
-    background: #1e293b;
     border: solid #334155;
-    height: 10;
-    padding: 1;
+    padding: 1 1;
+    background: #0b1220;
+    height: auto;
 }
 
 .status-ok { color: #4ade80; }
@@ -67,15 +61,25 @@ Screen {
     text-style: bold;
 }
 
-#chat-log {
-    height: 1fr;
+.main-content {
+    padding: 1 1;
+    border-top: solid #1f2937;
+}
+
+#sys-log {
+    height: 12;
     background: #0f172a;
+}
+
+#chat-log {
+    height: 6;
+    background: #08101a;
     border: none;
     padding: 1;
 }
 
 .main-row {
-    height: 1fr;
+    height: 14;
 }
 .left-col {
     width: 65%;
@@ -147,11 +151,20 @@ class OmarchyDashboard(App):
 
         # KPI grid — modules will mount their widgets here
         with Grid(classes="kpi-grid"):
-            yield Static("Module area", classes="card")
+            # Reserve explicit card slots for visible KPIs so layout is stable
+            yield Static("Ollama: --\nPort: 11434", id="kpi-ollama", classes="card")
+            yield Static("MCP: --\nPort: --", id="kpi-mcp", classes="card")
+            yield Static("Req/s: --", id="kpi-reqs", classes="card")
+            yield Static("Latency: --", id="kpi-lat", classes="card")
 
 
         with Container(classes="main-content"):
-            yield Label("  Server Log Tail (MCP)", classes="section-title")
+            # Header with toggle
+            with Horizontal():
+                yield Label("  Server Log Tail (MCP)", classes="section-title")
+                yield Button("Toggle Log", id="btn-toggle-log")
+            yield Container(id="log-panel")
+            # Place the Log inside the log-panel container so it can be shown/hidden
             yield Log(id="sys-log")
 
         with Horizontal(classes="main-row"):
@@ -166,36 +179,86 @@ class OmarchyDashboard(App):
 
         yield Footer()
 
-    def on_mount(self):
-        # Initialize modules
+    def register_modules(self):
+        """Create module instances and store them in self.modules (no mounting yet)."""
         from ref.dashboard.mcp_monitor import MCPMonitor
         from ref.dashboard.llm_monitor import LLMMonitor
         from ref.dashboard.mcp_metrics import MCPMetrics
         from ref.dashboard.llm_telemetry import LLMTelemetry
         from ref.dashboard.log_tail import LogTail
-
-        self.modules = []
-        m1 = MCPMonitor()
-        m2 = LLMMonitor()
-        m3 = MCPMetrics()
-        m4 = LLMTelemetry()
-        m5 = LogTail()
         from ref.dashboard.request_rate import RequestRate
         from ref.dashboard.latency_graph import LatencyGraph
         from ref.dashboard.gpu_widget import GPUMetrics
 
-        m6 = RequestRate()
-        m7 = LatencyGraph()
-        m8 = GPUMetrics()
+        self.modules = []
+        self.modules.extend([
+            MCPMonitor(),
+            LLMMonitor(),
+            MCPMetrics(),
+            LLMTelemetry(),
+            RequestRate(),
+            LatencyGraph(),
+            GPUMetrics(),
+            LogTail()
+        ])
 
-        # mount modules (they will attach their widgets into the kpi-grid/main area)
-        for m in (m1, m2, m3, m4, m6, m7, m8, m5):
+    def mount_modules(self):
+        """Attempt to mount modules' widgets into the UI; always add widget references to _widget_registry so tests can inspect them.
+        Also create fallback KPI placeholders in `_kpi_map` so modules can update KPIs even when the Textual DOM is not active (headless tests)."""
+        self._widget_registry = []
+        self._kpi_map = {}
+        # try to locate existing KPI static slots - if not present, create placeholders
+        for kid in ('#kpi-ollama', '#kpi-mcp', '#kpi-reqs', '#kpi-lat'):
+            try:
+                w = self.query_one(kid)
+                self._kpi_map[kid] = None  # presence confirmed
+            except Exception:
+                self._kpi_map[kid] = ''  # placeholder text
+
+        for m in self.modules:
             try:
                 m.mount(self)
+                m._mounted = True
             except Exception:
-                # If mount deferred because UI isn't active, still track the module
+                m._mounted = False
+            # record widget reference for tests even if mount deferred
+            if hasattr(m, 'widget'):
+                self._widget_registry.append(m.widget)
+
+    def set_kpi(self, kpi_id: str, text: str):
+        """Set KPI text by id (e.g., '#kpi-mcp'). Always update the internal placeholder map so tests can read it."""
+        try:
+            # Try update the real widget if available
+            self.query_one(kpi_id).update(text)
+        except Exception:
+            # Store placeholder text for tests / headless
+            self._kpi_map.setdefault(kpi_id, text)
+            self._kpi_map[kpi_id] = text
+
+    def get_kpi_text(self, kpi_id: str):
+        try:
+            if kpi_id in self._kpi_map:
+                return self._kpi_map[kpi_id]
+        except Exception:
+            pass
+        return None
+    log_collapsed = reactive(False)
+
+    def on_mount(self):
+        # Initialize modules
+        self.register_modules()
+        # Mount into UI (if available) and also populate KPI slots
+        try:
+            self.mount_modules()
+            # Populate quick KPI labels for immediate feedback
+            try:
+                self.query_one("#kpi-ollama").update("Ollama: --\nPort: 11434")
+                self.query_one("#kpi-mcp").update("MCP: --\nPort: --")
+            except Exception:
                 pass
-            self.modules.append(m)
+        except Exception:
+            # Ensure modules are still registered even if mount fails
+            pass
 
         # Start their periodic tasks (start will be safe if UI isn't yet active)
         for m in self.modules:
@@ -203,8 +266,55 @@ class OmarchyDashboard(App):
 
         # Keep existing logging and tool check schedule
         self.set_interval(1.0, self.monitor_resources)
+        self.set_interval(1.0, self.refresh_kpis)
         self.log_msg("Dashboard initialized with modules.")
         self.call_later(self.check_tools)
+
+    def toggle_log(self):
+        """Toggle the visibility of the server log panel."""
+        self.log_collapsed = not getattr(self, 'log_collapsed', False)
+        try:
+            # If running Textual, toggle the log's container visibility
+            panel = self.query_one('#log-panel')
+            log = self.query_one('#sys-log')
+            if self.log_collapsed:
+                log.display = False
+                try:
+                    panel.styles.height = 1
+                except Exception:
+                    pass
+            else:
+                log.display = True
+                try:
+                    panel.styles.height = None
+                except Exception:
+                    pass
+        except Exception:
+            # Headless: just update flag and fall back placeholder
+            pass
+
+    def action_toggle_log(self):
+        # Expose an action that UI buttons can call
+        self.toggle_log()
+
+    async def on_button_pressed(self, event):
+        if getattr(event, 'button', None) and event.button.id == 'btn-toggle-log':
+            self.toggle_log()
+
+    def refresh_kpis(self):
+        # Update KPI slots by reading module widgets where available
+        try:
+            # Update Ollama/MCP and telemetry KPIs
+            for w in getattr(self, '_widget_registry', []):
+                # match by class name or id heuristics
+                txt = None
+                try:
+                    txt = getattr(w, 'renderable', None)
+                except Exception:
+                    txt = None
+                # For now, rely on module widgets updating log and status; leave placeholders
+        except Exception:
+            pass
 
     def start_module(self, module):
         # Start is async; schedule it

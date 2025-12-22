@@ -46,6 +46,22 @@ class MCPMonitor(BaseModule):
                 async with session.post(f"{mcp_url.rstrip('/')}/call", json={"method": "tools/list", "params": {}}, timeout=1) as r:
                     is_up = r.status == 200
                     self.widget.set_status(is_up)
+                    # Update dashboard KPI placeholder if available
+                    try:
+                        port = ''
+                        try:
+                            from urllib.parse import urlparse
+                            u = urlparse(mcp_url)
+                            port = u.port or ''
+                        except Exception:
+                            port = ''
+                        if self.app:
+                            try:
+                                self.app.set_kpi('#kpi-mcp', f"MCP: {'ONLINE' if is_up else 'OFFLINE'}\nPort: {port}")
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                     try:
                         if is_up and self.app:
                             self.app.query_one("#sys-log").write("MCP Server: OK")

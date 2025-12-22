@@ -52,9 +52,18 @@ class RequestRate(BaseModule):
                         data = await r.json()
                         rate = data.get('telemetry', {}).get('reqs_last_minute', 0) / 60.0
                         self.widget.set_rate(rate)
+                        if self.app:
+                            try:
+                                self.app.set_kpi('#kpi-reqs', f"Req/s: {rate:.1f}")
+                            except Exception:
+                                pass
         except Exception:
             self.widget.set_rate(0.0)
-
+            if self.app:
+                try:
+                    self.app.set_kpi('#kpi-reqs', "Req/s: 0.0")
+                except Exception:
+                    pass
     @work(exclusive=True)
     async def _check(self):
         await self.do_check()
