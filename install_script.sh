@@ -1,12 +1,14 @@
 #!/bin/bash
 
-# Omarchy Installation Script
+# Singularity Installation Script
 # Installs the MCP server and CLI for AI-powered coding
 
 set -e
 
-echo "🚀 Installing Omarchy - AI Code Agent"
-echo "======================================"
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+echo "🚀 Installing Singularity - AI Code Agent"
+echo "========================================"
 
 # Colors
 RED='\033[0;31m'
@@ -39,36 +41,36 @@ echo -e "${CYAN}Pulling Qwen2.5-Coder model...${NC}"
 echo -e "${YELLOW}This may take several minutes (model is ~8GB)${NC}"
 ollama pull qwen2.5-coder:14b-instruct-q4_K_M
 
-# Create Omarchy directory
+# Create Singularity directory (and legacy Omarchy directory for compatibility)
 SINGULARITY_DIR="$HOME/.singularity"
-echo -e "${CYAN}Creating Singularity directory at ${SINGULARITY_DIR}...${NC}"
-mkdir -p "$SINGULARITY_DIR"
-mkdir -p "$SINGULARITY_DIR/knowledge"
-mkdir -p "$SINGULARITY_DIR/plans"
-mkdir -p "$SINGULARITY_DIR/tools"
-mkdir -p "$SINGULARITY_DIR/sessions"
+OMARCHY_DIR="$HOME/.omarchy"
+echo -e "${CYAN}Creating Singularity directory at ${SINGULARITY_DIR} (and legacy ${OMARCHY_DIR})...${NC}"
+mkdir -p "$SINGULARITY_DIR" "$SINGULARITY_DIR/knowledge" "$SINGULARITY_DIR/plans" "$SINGULARITY_DIR/tools" "$SINGULARITY_DIR/sessions"
+mkdir -p "$OMARCHY_DIR" "$OMARCHY_DIR/knowledge" "$OMARCHY_DIR/plans" "$OMARCHY_DIR/tools" "$OMARCHY_DIR/sessions"
 
 # Install Python dependencies
 echo -e "${CYAN}Installing Python dependencies...${NC}"
 python3 -m pip install rich aiohttp
 
-# Download MCP server
-echo -e "${CYAN}Installing MCP server...${NC}"
-cat > "$OMARCHY_DIR/mcp_server.py" << 'MCP_SERVER_END'
-# Paste the MCP server code here
-# (The full mcp_server.py content from the first artifact)
-MCP_SERVER_END
+# Install MCP server from repo to Singularity directory (and copy legacy path)
+echo -e "${CYAN}Installing MCP server into ${SINGULARITY_DIR} (and ${OMARCHY_DIR})...${NC}"
+cp "$REPO_ROOT/mcp_server.py" "$SINGULARITY_DIR/mcp_server.py"
+cp "$SINGULARITY_DIR/mcp_server.py" "$OMARCHY_DIR/mcp_server.py"
+chmod +x "$SINGULARITY_DIR/mcp_server.py" "$OMARCHY_DIR/mcp_server.py"
 
-chmod +x "$OMARCHY_DIR/mcp_server.py"
+# Install CLI into Singularity directory and create legacy Omarchy alias
+echo -e "${CYAN}Installing Singularity CLI into ${SINGULARITY_DIR} (and legacy ${OMARCHY_DIR})...${NC}"
+cp "$REPO_ROOT/singularity_cli.py" "$SINGULARITY_DIR/singularity.py"
+cp "$SINGULARITY_DIR/singularity.py" "$OMARCHY_DIR/omarchy.py"
+chmod +x "$SINGULARITY_DIR/singularity.py" "$OMARCHY_DIR/omarchy.py"
 
-# Download CLI
-echo -e "${CYAN}Installing Omarchy CLI...${NC}"
-cat > "$OMARCHY_DIR/omarchy.py" << 'CLI_END'
-#!/usr/bin/env python3
-"""
-Omarchy CLI - Beautiful Code Agent Interface
-Powered by Ollama Qwen2.5-Coder with MCP Tools
-"""
+# Create command-line shortcuts for Singularity and a legacy Omarchy alias
+echo -e "${CYAN}Creating command-line shortcuts...${NC}"
+sudo ln -sf "$SINGULARITY_DIR/singularity.py" /usr/local/bin/singularity 2>/dev/null || \
+    ln -sf "$SINGULARITY_DIR/singularity.py" "$HOME/.local/bin/singularity"
+# Legacy alias (kept for compatibility)
+sudo ln -sf "$SINGULARITY_DIR/singularity.py" /usr/local/bin/omarchy 2>/dev/null || \
+    ln -sf "$SINGULARITY_DIR/singularity.py" "$HOME/.local/bin/omarchy"
 
 import asyncio
 import json
@@ -508,9 +510,9 @@ echo -e "${CYAN}Creating command-line shortcut...${NC}"
 sudo ln -sf "$OMARCHY_DIR/omarchy.py" /usr/local/bin/omarchy 2>/dev/null || \
     ln -sf "$OMARCHY_DIR/omarchy.py" "$HOME/.local/bin/omarchy"
 
-# Create config file
+# Create configuration file (Singularity + legacy Omarchy copy)
 echo -e "${CYAN}Creating configuration file...${NC}"
-cat > "$OMARCHY_DIR/config.json" << 'CONFIG_END'
+cat > "$SINGULARITY_DIR/config.json" << 'CONFIG_END'
 {
   "model": "qwen2.5-coder:14b-instruct-q4_K_M",
   "ollama_host": "http://localhost:11434",
@@ -522,6 +524,7 @@ cat > "$OMARCHY_DIR/config.json" << 'CONFIG_END'
   "theme": "monokai"
 }
 CONFIG_END
+cp "$SINGULARITY_DIR/config.json" "$OMARCHY_DIR/config.json"
 
 # Create welcome script
 cat > "$OMARCHY_DIR/welcome.sh" << 'WELCOME_END'
@@ -540,10 +543,10 @@ echo ""
 echo "🎉 Installation complete!"
 echo ""
 echo "Quick Start:"
-echo "  omarchy                    - Start interactive mode"
-echo "  omarchy 'your prompt'      - Direct prompt mode"
-echo "  omarchy --mode code        - Start in code mode"
-echo "  omarchy --help             - Show all options"
+echo "  singularity                    - Start interactive mode (omarchy alias supported)"
+echo "  singularity 'your prompt'      - Direct prompt mode"
+echo "  singularity --mode code        - Start in code mode"
+echo "  singularity --help             - Show all options"
 echo ""
 echo "Configuration: ~/.omarchy/config.json"
 echo "Knowledge Base: ~/.omarchy/knowledge/"
@@ -718,5 +721,5 @@ EXAMPLES_END
 
 echo -e "${GREEN}✓ Examples saved to ~/.omarchy/examples.md${NC}"
 echo ""
-echo -e "${CYAN}Try it now:${NC} omarchy"
+echo -e "${CYAN}Try it now:${NC} singularity (legacy 'omarchy' alias supported)"
 echo ""

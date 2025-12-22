@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Omarchy MCP Server - Advanced Code Agent Tools
+Singularity MCP Server - Advanced Code Agent Tools (legacy: Omarchy)
 Provides comprehensive development capabilities with self-improvement
 """
 
@@ -1479,7 +1479,7 @@ async def _fetch_url_impl(self, args: Dict) -> ToolResult:
             return ToolResult(status=ToolStatus.ERROR, error='No URL provided')
         timeout = float(args.get('timeout', 5.0))
         maxlen = int(args.get('maxlen', 8000))
-        req = urllib.request.Request(url, headers={"User-Agent": "Omarchy/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Singularity/1.0 (Omarchy compatible)"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode('utf-8', errors='replace')
         # Strip tags and collapse whitespace

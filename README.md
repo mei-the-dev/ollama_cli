@@ -9,7 +9,7 @@ Highlights
 
 Quick start
 1. Install (see `install_script.sh`)
-2. Start the CLI: `omarchy`
+2. Start the CLI: `singularity` (legacy: `omarchy` alias supported)
 3. Use `/mode code` and ask for code generation. To let the agent write files automatically, enable startup auto-apply.
 
 Documentation

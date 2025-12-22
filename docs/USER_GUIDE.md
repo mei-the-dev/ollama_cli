@@ -1,7 +1,7 @@
 # Singularity User Guide
 
 ## Overview
-Omarchy is an AI coding assistant that combines an interactive CLI and a local MCP server that exposes developer tools. It focuses on safe code edits, context-aware actions, and reproducible workflows.
+Singularity is an AI coding assistant (formerly Omarchy) that combines an interactive CLI and a local MCP server that exposes developer tools. It focuses on safe code edits, context-aware actions, and reproducible workflows.
 
 ## CLI Highlights
 - Artistic, distraction-less banner and layout
@@ -14,7 +14,7 @@ Key fields:
 - `auto_apply`: boolean (default `false`) — opt-in to let the CLI auto-apply `write_code` requests
 
 ## Startup Workflow
-On first start, Omarchy asks to:
+On first start, Singularity asks to:
 1. Transfer knowledge (loads `~/.singularity/knowledge/*.json` into system prompt)
 2. Transfer conversation context (loads `~/.singularity/context/context.json`) 
 3. Enable auto-apply for file writes
