@@ -1,4 +1,3 @@
-import os
 import sys
 import json
 import subprocess
@@ -107,9 +106,9 @@ def test_manage_context(mcp):
     import asyncio
     a = asyncio.run(mcp.manage_context({'action': 'add', 'items': ['note1']}))
     assert a.status == ToolStatus.SUCCESS
-    l = asyncio.run(mcp.manage_context({'action': 'list'}))
-    assert l.status == ToolStatus.SUCCESS
-    assert l.data['count'] >= 1
+    lst = asyncio.run(mcp.manage_context({'action': 'list'}))
+    assert lst.status == ToolStatus.SUCCESS
+    assert lst.data['count'] >= 1
     r = asyncio.run(mcp.manage_context({'action': 'remove', 'items': 'note1'}))
     assert r.status == ToolStatus.SUCCESS
 

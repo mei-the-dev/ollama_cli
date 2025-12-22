@@ -1,6 +1,4 @@
-import os
 import json
-import asyncio
 import subprocess
 import sys
 import pytest
@@ -92,8 +90,8 @@ async def test_save_and_load_session(temp_home):
     sessions_dir = Path.home() / '.omarchy' / 'sessions'
     session_file = sessions_dir / 's1.json'
     assert session_file.exists()
-    l = await server.load_session({'name': 's1'})
-    assert l.status == ToolStatus.SUCCESS
+    loaded = await server.load_session({'name': 's1'})
+    assert loaded.status == ToolStatus.SUCCESS
     assert server.conversation_history[0]['content'] == 'hi'
 
 @pytest.mark.asyncio
@@ -136,7 +134,8 @@ async def test_cli_starts_mcp_server(tmp_path, monkeypatch):
     proc = await agent.start_mcp_server(timeout=3.0)
     assert proc is not None
     # Wait briefly and perform health check
-    import urllib.request, json
+    import urllib.request
+    import json
     url = getattr(agent, 'mcp_server_url', None)
     assert url is not None
     resp = urllib.request.urlopen(f"{url}/health", timeout=3)

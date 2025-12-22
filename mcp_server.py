@@ -1,17 +1,17 @@
-from dataclasses import dataclass, field
-from enum import Enum
 #!/usr/bin/env python3
 """
 Omarchy MCP Server - Advanced Code Agent Tools
 Provides comprehensive development capabilities with self-improvement
 """
 
+from dataclasses import dataclass, field
+from enum import Enum
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import asyncio
 import aiohttp
 from datetime import datetime
@@ -665,9 +665,6 @@ class MCPServer:
             dry_run = args.get("dry_run", False)
             if not filepath.exists():
                 return ToolResult(status=ToolStatus.ERROR, error="File not found")
-            original = filepath.read_text()
-            lines = original.splitlines(keepends=True)
-            diff_lines = diff_text.splitlines()
             # (Stub) Real implementation would use a diff parser
             # For now, just preview diff
             if dry_run:
@@ -683,20 +680,7 @@ class MCPServer:
             )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-        # This is a placeholder for the concept
-        
-        if dry_run:
-            return {
-                "dry_run": True,
-                "would_change": True,
-                "preview": diff_text
-            }
-        
-        return {
-            "success": True,
-            "filepath": str(filepath),
-            "changes_applied": True
-        }
+
     
     async def git_operation(self, args: Dict) -> ToolResult:
         """Enhanced git with smart features, returns ToolResult"""
@@ -763,7 +747,6 @@ class MCPServer:
                 )
                 chunks = []
                 try:
-                    start = datetime.now()
                     while True:
                         line = await proc.stdout.readline()
                         if not line:
@@ -843,59 +826,7 @@ class MCPServer:
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
     
-    async def git_operation(self, args: Dict) -> Dict:
-        """Enhanced git with smart features"""
-        operation = args["operation"]
-        git_args = args.get("args", [])
-        auto_stage = args.get("auto_stage", False)
-        generate_message = args.get("generate_message", False)
-        
-        # Auto-stage if requested
-        if auto_stage and operation == "commit":
-            subprocess.run(["git", "add", "-A"], capture_output=True)
-        
-        # Generate commit message if requested
-        if generate_message and operation == "commit":
-            # Get diff
-            diff_result = subprocess.run(
-                ["git", "diff", "--cached"],
-                capture_output=True,
-                text=True
-            )
-            
-            if diff_result.stdout:
-                # Simple commit message generation based on changes
-                files_changed = subprocess.run(
-                    ["git", "diff", "--cached", "--name-only"],
-                    capture_output=True,
-                    text=True
-                ).stdout.strip().split('\n')
-                
-                msg = f"Update {len(files_changed)} file(s): {', '.join(files_changed[:3])}"
-                if len(files_changed) > 3:
-                    msg += f" and {len(files_changed) - 3} more"
-                
-                git_args = ["-m", msg] + git_args
-        
-        cmd = ["git", operation] + git_args
-        
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            return {
-                "operation": operation,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "success": result.returncode == 0,
-                "command": " ".join(cmd)
-            }
-        except Exception as e:
-            return {"error": str(e)}
+    # Duplicate git_operation definition removed; earlier definition returning ToolResult is kept for consistent ToolResult usage.
     
     async def create_plan(self, args: Dict) -> ToolResult:
         """Enhanced planning with auto breakdown, returns ToolResult"""
@@ -1142,7 +1073,7 @@ class MCPServer:
             error = args.get("error_message", "")
             stack = args.get("stack_trace", "")
             code = args.get("code_context", "")
-            language = args.get("language", "python")
+            language = args.get("language", "python")  # noqa: F841
             suggest = bool(args.get("suggest_fixes", True))
             explanation = ""
             root = None
@@ -1176,7 +1107,7 @@ class MCPServer:
             query = args.get("query")
             base_path = Path(args.get("path", "."))
             context_lines = int(args.get("context_lines", 2))
-            fuzzy = bool(args.get("fuzzy", False))
+            fuzzy = bool(args.get("fuzzy", False))  # noqa: F841
             limit = int(args.get("limit", 200))
             if not query:
                 return ToolResult(status=ToolStatus.ERROR, error="No query provided")
@@ -1364,7 +1295,7 @@ class MCPServer:
         try:
             action = args.get("action")
             items = args.get("items", [])
-            auto_prune = bool(args.get("auto_prune", False))
+            auto_prune = bool(args.get("auto_prune", False))  # noqa: F841
             ctx_file = self.context_dir / "context.json"
             context = []
             if ctx_file.exists():
@@ -1411,9 +1342,9 @@ class MCPServer:
         """Run tests for a file or project using pytest and return results"""
         try:
             filepath = args.get("filepath")
-            test_type = args.get("test_type", "unit")
-            auto_fix = bool(args.get("auto_fix", False))
-            generate_tests = bool(args.get("generate_tests", False))
+            test_type = args.get("test_type", "unit")  # noqa: F841
+            auto_fix = bool(args.get("auto_fix", False))  # noqa: F841
+            generate_tests = bool(args.get("generate_tests", False))  # noqa: F841
             cwd = Path(filepath).parent if filepath else Path.cwd()
             cmd = [sys.executable, "-m", "pytest", "-q"]
             if filepath:
@@ -1633,42 +1564,7 @@ if __name__ == '__main__':
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
-    async def debug_assistant(self, args: Dict) -> ToolResult:
-        """Provide debugging suggestions based on error messages and code context"""
-        try:
-            error = args.get("error_message", "")
-            stack = args.get("stack_trace", "")
-            code = args.get("code_context", "")
-            language = args.get("language", "python")
-            suggest = bool(args.get("suggest_fixes", True))
-            explanation = ""
-            root = None
-            suggestions = []
-            if "NoneType" in error and "iter" in error.lower():
-                explanation = "This error usually means you're trying to iterate over a None value."
-                root = "Variable is None where iterable expected"
-                if suggest:
-                    suggestions.append({"description": "Add a None check or default to empty list", "code": "if var is not None:\n    for x in var:\n        ...", "confidence": 0.95})
-                    suggestions.append({"description": "Initialize with empty list when None", "code": "var = var or []", "confidence": 0.85})
-            elif "NameError" in error:
-                explanation = "NameError indicates a variable is referenced before assignment or not defined in scope."
-                root = "Undefined variable"
-                if suggest:
-                    suggestions.append({"description": "Define the variable or import the module", "code": "my_var = 0", "confidence": 0.9})
-            elif "SyntaxError" in error:
-                explanation = "SyntaxError indicates invalid syntax in your code. Check the stack trace for exact location."
-                root = "Invalid syntax"
-                if suggest:
-                    suggestions.append({"description": "Fix syntax as indicated by parser", "code": "# Inspect the line and correct syntax", "confidence": 0.9})
-            else:
-                explanation = "No specific heuristic matched. Provide relevant stack trace and surrounding code for deeper analysis."
-                root = "Unknown"
-            return ToolResult(status=ToolStatus.SUCCESS, data={"explanation": explanation, "root_cause": root, "suggested_fixes": suggestions, "stack": stack, "code": code})
-        except Exception as e:
-            return ToolResult(status=ToolStatus.ERROR, error=str(e))
-
-
-
+    
 
 
     async def search_files(self, args: Dict) -> ToolResult:
@@ -1677,7 +1573,7 @@ if __name__ == '__main__':
             query = args.get("query")
             base_path = Path(args.get("path", "."))
             context_lines = int(args.get("context_lines", 2))
-            fuzzy = bool(args.get("fuzzy", False))
+            fuzzy = bool(args.get("fuzzy", False))  # noqa: F841
             limit = int(args.get("limit", 200))
             if not query:
                 return ToolResult(status=ToolStatus.ERROR, error="No query provided")
@@ -1864,7 +1760,7 @@ if __name__ == '__main__':
         try:
             action = args.get("action")
             items = args.get("items", [])
-            auto_prune = bool(args.get("auto_prune", False))
+            auto_prune = bool(args.get("auto_prune", False))  # noqa: F841
             ctx_file = self.context_dir / "context.json"
             context = []
             if ctx_file.exists():
@@ -1911,9 +1807,9 @@ if __name__ == '__main__':
         """Run tests for a file or project using pytest and return results"""
         try:
             filepath = args.get("filepath")
-            test_type = args.get("test_type", "unit")
-            auto_fix = bool(args.get("auto_fix", False))
-            generate_tests = bool(args.get("generate_tests", False))
+            test_type = args.get("test_type", "unit")  # noqa: F841
+            auto_fix = bool(args.get("auto_fix", False))  # noqa: F841
+            generate_tests = bool(args.get("generate_tests", False))  # noqa: F841
             cwd = Path(filepath).parent if filepath else Path.cwd()
             cmd = [sys.executable, "-m", "pytest", "-q"]
             if filepath:

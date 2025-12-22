@@ -1,8 +1,4 @@
-import os
 import json
-import getpass
-from pathlib import Path
-import pytest
 from omarchy_cli import OmarchyCLI
 
 

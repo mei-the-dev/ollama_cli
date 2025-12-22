@@ -1,7 +1,5 @@
-import asyncio
-import os
 from omarchy_cli import OmarchyCLI, OmarchyAgent
-from mcp_server import MCPServer, ToolResult, ToolStatus
+from mcp_server import MCPServer, ToolStatus
 import pytest
 
 class DummyAgent(OmarchyAgent):
@@ -20,8 +18,6 @@ async def test_cli_autowrite(monkeypatch, tmp_path, capsys):
     cli.agent = DummyAgent()
     cli.auto_apply = True
 
-    # Start a small mcp server in-process that will accept the /call
-    m = MCPServer()
     async def handler(args):
         if args.get('name') == 'write_code':
             return {

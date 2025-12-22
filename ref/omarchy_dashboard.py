@@ -5,9 +5,7 @@ A unified dashboard for monitoring Ollama and the Omarchy MCP Server.
 
 Save this file in the repo (e.g. `ref/omarchy_dashboard.py`) or copy to `~/.omarchy/omarchy_dashboard.py`.
 """
-import asyncio
 import json
-import time
 import os
 from datetime import datetime
 from collections import deque
@@ -28,7 +26,6 @@ from textual.widgets import (
     Tree,
 )
 from textual.reactive import reactive
-from textual.worker import Worker
 from textual import work
 
 # --- VISUAL STYLING ---
@@ -282,7 +279,6 @@ class OmarchyDashboard(App):
         log = self.query_one("#chat-log")
         log.write("[bold purple]AI >[/bold purple] ")
 
-        start_time = time.time()
         count = 0
 
         try:

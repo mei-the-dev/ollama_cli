@@ -1,7 +1,5 @@
 import urllib.request
-import json
 import asyncio
-from pathlib import Path
 
 from mcp_server import MCPServer, ToolStatus
 

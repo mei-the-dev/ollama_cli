@@ -1,7 +1,5 @@
-import os
 import asyncio
 import types
-import builtins
 
 import pytest
 

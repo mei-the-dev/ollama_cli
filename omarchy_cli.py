@@ -10,40 +10,35 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import List, Dict
 import subprocess
 import shutil
 import argparse
 from datetime import datetime
 import logging
+import getpass
+import aiohttp
 
 try:
     from rich.console import Console
     from rich.panel import Panel
     from rich.columns import Columns
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.prompt import Prompt, Confirm
-    from rich.syntax import Syntax
     from rich.table import Table
     from rich.live import Live
     from rich.markdown import Markdown
-    from rich import print as rprint
 except ImportError:
     print("Installing required dependencies...")
     subprocess.run([sys.executable, "-m", "pip", "install", "rich"], check=True)
     from rich.console import Console
     from rich.panel import Panel
     from rich.columns import Columns
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.prompt import Prompt, Confirm
-    from rich.syntax import Syntax
     from rich.table import Table
     from rich.live import Live
     from rich.markdown import Markdown
-    from rich import print as rprint
 
 console = Console()
-import getpass
 
 # Setup a simple file logger for non-interactive/plain logs
 logger = logging.getLogger('omarchy')
@@ -663,7 +658,7 @@ class OmarchyCLI:
                 except asyncio.TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    console.print(f"[red]Error: command timed out after 30s[/red]")
+                    console.print("[red]Error: command timed out after 30s[/red]")
                     logger.warning('execute_command timeout: %s', cmd)
                     return
                 out = out_bytes.decode(errors='replace') if out_bytes else ''
@@ -683,7 +678,6 @@ class OmarchyCLI:
         - If `tmux` is available, spawn a new tmux window named `dashboard-<ts>` and run the dashboard there.
         - Otherwise, start the dashboard as a background Python process and write logs to ./logs/dashboard.log
         """
-        import shutil
         import time
         dashboard_path = os.path.join(os.path.dirname(__file__), 'ref', 'omarchy_dashboard.py')
 
@@ -710,7 +704,7 @@ class OmarchyCLI:
             # Discard output but also write a small starter log
             try:
                 with open(dashboard_log, 'ab') as f:
-                    f.write(f"Started dashboard pid={proc.pid} at {datetime.now().isoformat()}\n".encode('utf-8'))
+                    f.write(f"Started dashboard pid={proc.pid} at {datetime.now().astimezone().isoformat()}\n".encode('utf-8'))
             except Exception:
                 pass
 
@@ -798,8 +792,9 @@ async def main():
             if result.returncode != 0:
                 console.print("[red]Ollama is not running. Please start it with: ollama serve[/red]")
                 return
-        except:
-            console.print("[red]Cannot connect to Ollama. Please ensure it's installed and running.[/red]")
+        except Exception as e:
+            console.print(f"[red]Cannot connect to Ollama: {e}[/red]")
+            logger.exception('Cannot connect to Ollama')
             return
     
     # Direct prompt mode
