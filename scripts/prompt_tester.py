@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""Run a battery of code-generation prompts against a local model (Ollama) and save results.
+
+Usage:
+  RUN_LIVE_OLLAMA=1 python scripts/prompt_tester.py
+
+Outputs:
+  reports/prompt_test_results.jsonl
+
+This script is resilient: if Ollama is not reachable, it records failures and saves prompts for later.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import List
+
+import requests
+
+ROOT = Path(__file__).resolve().parent.parent
+OUT = ROOT / "reports" / "prompt_test_results.jsonl"
+OUT.parent.mkdir(parents=True, exist_ok=True)
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL") or "http://localhost:11434/api/chat"
+USE_LIVE = os.environ.get("RUN_LIVE_OLLAMA") == "1"
+TIMEOUT = 10
+
+PROMPTS: List[str] = [
+    # 1-10: basic helpers
+    "Write a Python function `read_file(path)` that returns file contents with proper error handling and docstring.",
+    "Write a CLI command (argparse) `count-lines` that prints the number of lines in a file and handles missing files gracefully.",
+    "Generate a small Python module `fsutils.py` with `ensure_dir(path)` and tests for it.",
+    "Provide a robust `parse_args(argv)` function that supports subcommands `init` and `run` and prints helpful usage.",
+    "Write a function `atomic_write(path, content)` that writes to a temp file and renames to avoid partial files.",
+    "Generate unit tests (pytest) for a function `is_valid_email(s)` with edge cases.",
+    "Write a function that detects a project's virtualenv path cross-platform (Windows/Linux/Mac).",
+    "Provide a small script that performs idempotent config file updates (adds key if missing), with tests.",
+    "Write a code example that safely runs a shell command and captures stdout/stderr using subprocess.run.",
+    "Suggest a good logging configuration for a CLI tool that writes to console and file with rotating logs.",
+
+    # 11-20: CLI-specific code generation
+    "Create a function `prompt_user_yes_no(prompt, default=True)` that handles CTRL-C and returns boolean.",
+    "Write a function to pretty-print JSON colorized for terminal using 'rich' if available, fallback to print.",
+    "Generate a `setup_logging()` helper that accepts a debug flag and configures logging accordingly.",
+    "Write an interactive REPL loop that reads user commands, provides help, and supports `exit`/`quit`.",
+    "Create a serializer that dumps dataclasses to JSON with support for datetime objects.",
+    "Write code that validates config file schema (using pydantic or simple checks) and reports useful error messages.",
+    "Generate a small plugin system loader that discovers entry points in a `plugins/` directory.",
+    "Implement a retry decorator with exponential backoff and jitter for network calls.",
+    "Write a CLI function that opens a URL in the user's preferred browser in a cross-platform way.",
+    "Provide code to safely parse and normalize file paths, avoiding path traversal when given user input.",
+
+    # 21-30: security and edge cases
+    "Write a function that securely stores API tokens in the OS keyring with a fallback to file encryption.",
+    "Generate code to sandbox execution of untrusted Python code (`ast` + restricted globals) and explain limitations.",
+    "Write a function that validates and sanitizes filenames provided by users to prevent injection or traversal.",
+    "Provide an example of how to limit subprocess resource usage (timeout + memory) on Linux.",
+    "Implement a function that checks file permissions and warns if sensitive files are world-readable.",
+    "Generate tests that simulate concurrent writes to a file and assert atomicity and correctness.",
+    "Write code that performs safe JSON streaming parsing (for large JSON logs) without loading all into memory.",
+    "Create a function to detect the OS distribution/version and print a friendly message.",
+    "Write a linter-like function that checks for TODO or FIXME in repo files and returns a report.",
+    "Provide example code for migrating a configuration schema with backward compatibility tests.",
+
+    # 31-40: developer ergonomics
+    "Create a helper that watches a folder for file changes and triggers a callback (use watchdog if present).",
+    "Write a small script that creates a Python virtualenv and installs packages from requirements.txt.",
+    "Generate an example of a CLI progress bar for long-running file downloads (chunked, resumable).",
+    "Write code to generate a markdown report from test results and save it to reports/test_summary.md.",
+    "Provide a fast approximate file search function for a repo using indexing (simple Python implementation).",
+    "Create a debug helper that prints the current git branch, last commit, and uncommitted files in a single report.",
+    "Write a function to run external linters (flake8/black) and parse their output into structured JSON.",
+    "Generate CLI code that supports a `--config` flag and loads JSON/YAML configuration gracefully.",
+    "Write a small utility that safely opens an editor for the user to edit a temp file and returns content.",
+    "Provide code for a `--yes` / `--no` prompt wrapper used in scripts for non-interactive operation.",
+
+    # 41-50: higher-level/quality checks
+    "Write a function that annotates a piece of code with line numbers and shows a snippet for diagnostics.",
+    "Generate an example of a SQL-safe query builder that prevents injection by parameterized queries.",
+    "Create a test that ensures CLI exit codes are meaningful and documented for success/failure cases.",
+    "Write code to run a quick health-check that validates external dependencies (DB, network, services) before starting.",
+    "Provide a script to collect telemetry-like metrics (memory, cpu, runtime) for a command and write JSON.",
+    "Implement a function to normalize timestamps to timezone-aware ISO format across the codebase.",
+    "Write a generator that yields lines from a file but skips binary files and handles different encodings.",
+    "Provide code that creates a minimal HTTP server to serve static test artifacts for local integration tests.",
+    "Generate a small example that uses multiprocessing to parallelize CPU-bound tasks safely.",
+    "Write a function that performs task cancellation and cleanup when SIGINT/SIGTERM are received.",
+]
+
+
+def call_ollama(prompt: str) -> dict:
+    """Call local Ollama chat API with a simple message and return a dict with 'ok' and 'response'."""
+    try:
+        payload = {"messages": [{"role": "user", "content": prompt}], "max_tokens": 1024}
+        r = requests.post(OLLAMA_URL, json=payload, timeout=TIMEOUT)
+        r.raise_for_status()
+        j = r.json()
+        # heuristic: look for reply text in common shapes
+        content = None
+        if isinstance(j, dict):
+            # Ollama's chat returns {'choices': [{'message': {'content': '...'}}], ...}
+            choices = j.get('choices') or []
+            if choices and isinstance(choices, list):
+                msg = choices[0].get('message') if isinstance(choices[0], dict) else None
+                if msg and isinstance(msg, dict):
+                    content = msg.get('content')
+        if content is None:
+            # fallback, stringify json
+            content = json.dumps(j)
+        return {"ok": True, "raw": j, "response": content}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def run_all(prompts: List[str]):
+    results = []
+    for i, p in enumerate(prompts, start=1):
+        ts = datetime.now(timezone.utc).isoformat()
+        print(f"[{i}/{len(prompts)}] Prompt: {p[:80]}...")
+        rec = {"i": i, "ts": ts, "prompt": p}
+        if USE_LIVE:
+            out = call_ollama(p)
+            rec.update(out)
+        else:
+            rec.update({"ok": False, "error": "RUN_LIVE_OLLAMA not enabled"})
+        # save incrementally
+        with open(OUT, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        results.append(rec)
+        time.sleep(0.1)
+    return results
+
+
+if __name__ == "__main__":
+    print(f"Using live Ollama: {USE_LIVE}; endpoint: {OLLAMA_URL}")
+    res = run_all(PROMPTS)
+    succ = len([r for r in res if r.get('ok')])
+    print(f"Done. {succ}/{len(res)} prompts succeeded. Results written to: {OUT}")
+    sys.exit(0 if succ == len(res) else 2)
