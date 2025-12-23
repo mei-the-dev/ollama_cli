@@ -1,0 +1,253 @@
+prompt_index,prompt,filepath,flake8_ok,flake8_output,mypy_ok,mypy_output,pytest_result
+1,Write a Python function `read_file(path)` that returns file contents with proper error handling and docstring.,/path/to/file.py,False,reports/generated_from_model/full_run/path/to/file.py:23:72: W292 no newline at end of file,True,Success: no issues found in 1 source file,skipped
+2,Write a CLI command (argparse) `count-lines` that prints the number of lines in a file and handles missing files gracefully.,/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:17:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:24:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:25:11: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+3,Generate a small Python module `fsutils.py` with `ensure_dir(path)` and tests for it.,/path/to/fsutils.py,False,"reports/generated_from_model/full_run/path/to/fsutils.py:4:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/fsutils.py:19:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/fsutils.py:24:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/fsutils.py:43:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,skipped
+4,Provide a robust `parse_args(argv)` function that supports subcommands `init` and `run` and prints helpful usage.,/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:4:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:8:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:12:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:16:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:19:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:27:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:29:29: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+5,"Write a function `atomic_write(path, content)` that writes to a temp file and renames to avoid partial files.",/path/to/atomic_write.py,True,,True,Success: no issues found in 1 source file,skipped
+7,Write a function that detects a project's virtualenv path cross-platform (Windows/Linux/Mac).,/path/to/virtualenv_detector.py,False,"reports/generated_from_model/full_run/path/to/virtualenv_detector.py:2:1: F401 'os' imported but unused
+reports/generated_from_model/full_run/path/to/virtualenv_detector.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/virtualenv_detector.py:12:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/virtualenv_detector.py:18:50: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+8,"Provide a small script that performs idempotent config file updates (adds key if missing), with tests.",/path/to/config_updater.py,False,"reports/generated_from_model/full_run/path/to/config_updater.py:6:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/config_updater.py:10:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/config_updater.py:25:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/config_updater.py:46:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,skipped
+9,Write a code example that safely runs a shell command and captures stdout/stderr using subprocess.run.,/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:4:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:23:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:35:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:36:11: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+10,Suggest a good logging configuration for a CLI tool that writes to console and file with rotating logs.,/path/to/logging_config.py,False,"reports/generated_from_model/full_run/path/to/logging_config.py:4:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/logging_config.py:32:18: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+11,"Create a function `prompt_user_yes_no(prompt, default=True)` that handles CTRL-C and returns boolean.",/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:36:27: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+12,"Write a function to pretty-print JSON colorized for terminal using 'rich' if available, fallback to print.",/path/to/pretty_print_json.py,False,"reports/generated_from_model/full_run/path/to/pretty_print_json.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/pretty_print_json.py:9:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/pretty_print_json.py:21:42: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+13,Generate a `setup_logging()` helper that accepts a debug flag and configures logging accordingly.,/path/to/logging_helper.py,False,"reports/generated_from_model/full_run/path/to/logging_helper.py:3:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/logging_helper.py:10:93: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+14,"Write an interactive REPL loop that reads user commands, provides help, and supports `exit`/`quit`.",/path/to/repl.py,False,"reports/generated_from_model/full_run/path/to/repl.py:18:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/repl.py:19:11: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+15,Create a serializer that dumps dataclasses to JSON with support for datetime objects.,/path/to/serializer.py,False,"reports/generated_from_model/full_run/path/to/serializer.py:4:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/serializer.py:10:1: E302 expected 2 blank lines, found 0",True,Success: no issues found in 1 source file,skipped
+16,Write code that validates config file schema (using pydantic or simple checks) and reports useful error messages.,/path/to/config_validator.py,False,"reports/generated_from_model/full_run/path/to/config_validator.py:4:1: F401 'json' imported but unused
+reports/generated_from_model/full_run/path/to/config_validator.py:6:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/config_validator.py:23:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,skipped
+18,Implement a retry decorator with exponential backoff and jitter for network calls.,/path/to/retry_decorator.py,False,"reports/generated_from_model/full_run/path/to/retry_decorator.py:4:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/retry_decorator.py:7:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/retry_decorator.py:29:21: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+19,Write a CLI function that opens a URL in the user's preferred browser in a cross-platform way.,/path/to/cli_open_url.py,False,"reports/generated_from_model/full_run/path/to/cli_open_url.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/cli_open_url.py:8:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli_open_url.py:20:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/cli_open_url.py:25:18: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+20,"Provide code to safely parse and normalize file paths, avoiding path traversal when given user input.",/path/to/safe_path_parser.py,False,"reports/generated_from_model/full_run/path/to/safe_path_parser.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:10:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:13:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:16:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:19:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:23:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:26:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/safe_path_parser.py:33:17: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+21,Write a function that securely stores API tokens in the OS keyring with a fallback to file encryption.,/path/to/api_token_storage.py,False,"reports/generated_from_model/full_run/path/to/api_token_storage.py:1:1: F401 'os' imported but unused
+reports/generated_from_model/full_run/path/to/api_token_storage.py:2:1: F401 'base64' imported but unused
+reports/generated_from_model/full_run/path/to/api_token_storage.py:9:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/api_token_storage.py:12:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/api_token_storage.py:17:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/api_token_storage.py:22:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/api_token_storage.py:30:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/api_token_storage.py:38:31: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+22,Generate code to sandbox execution of untrusted Python code (`ast` + restricted globals) and explain limitations.,/path/to/sandbox.py,False,reports/generated_from_model/full_run/path/to/sandbox.py:1:2: E999 SyntaxError: invalid syntax,False,"reports/generated_from_model/full_run/path/to/sandbox.py:1: error: Invalid syntax  [syntax]
+Found 1 error in 1 file (errors prevented further checking)",skipped
+23,Write a function that validates and sanitizes filenames provided by users to prevent injection or traversal.,/path/to/validate_filename.py,False,"reports/generated_from_model/full_run/path/to/validate_filename.py:7:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/validate_filename.py:11:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/validate_filename.py:15:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/validate_filename.py:18:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/validate_filename.py:22:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,skipped
+24,Provide an example of how to limit subprocess resource usage (timeout + memory) on Linux.,/path/to/limit_subprocess_resources.py,False,"reports/generated_from_model/full_run/path/to/limit_subprocess_resources.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/limit_subprocess_resources.py:8:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/limit_subprocess_resources.py:12:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/limit_subprocess_resources.py:22:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/limit_subprocess_resources.py:27:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/limit_subprocess_resources.py:28:11: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+25,Implement a function that checks file permissions and warns if sensitive files are world-readable.,/path/to/check_file_permissions.py,False,"reports/generated_from_model/full_run/path/to/check_file_permissions.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/check_file_permissions.py:11:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/check_file_permissions.py:22:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/check_file_permissions.py:27:58: W292 no newline at end of file",True,Success: no issues found in 1 source file,skipped
+26,Generate tests that simulate concurrent writes to a file and assert atomicity and correctness.,/path/to/your/test_concurrent_writes.py,False,"reports/generated_from_model/full_run/path/to/your/test_concurrent_writes.py:6:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/test_concurrent_writes.py:46:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+28,Create a function to detect the OS distribution/version and print a friendly message.,/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:3:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/your/script.py:7:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:17:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:21:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+31,Create a helper that watches a folder for file changes and triggers a callback (use watchdog if present).,/path/to/watch_folder.py,False,"reports/generated_from_model/full_run/path/to/watch_folder.py:7:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/watch_folder.py:21:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/watch_folder.py:33:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/watch_folder.py:37:48: W292 no newline at end of file",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+32,Write a small script that creates a Python virtualenv and installs packages from requirements.txt.,/path/to/script.sh,False,reports/generated_from_model/full_run/path/to/script.sh:10:13: E999 SyntaxError: invalid syntax,False,"reports/generated_from_model/full_run/path/to/script.sh:10: error: Invalid syntax  [syntax]
+Found 1 error in 1 file (errors prevented further checking)","code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+33,"Generate an example of a CLI progress bar for long-running file downloads (chunked, resumable).",/path/to/cli_progress_bar.py,False,"reports/generated_from_model/full_run/path/to/cli_progress_bar.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:9:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:12:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:19:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:25:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:28:36: W292 no newline at end of file",False,"reports/generated_from_model/full_run/path/to/cli_progress_bar.py:2: error: Library stubs not installed for ""requests""  [import-untyped]
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:2: note: Hint: ""python3 -m pip install types-requests""
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:2: note: (or run ""mypy --install-types"" to install all missing stub packages)
+reports/generated_from_model/full_run/path/to/cli_progress_bar.py:2: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+Found 1 error in 1 file (checked 1 source file)","code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+34,Write code to generate a markdown report from test results and save it to reports/test_summary.md.,/path/to/reports/test_summary.md,False,reports/generated_from_model/full_run/path/to/reports/test_summary.md:5:2: E999 SyntaxError: invalid syntax,False,"reports/generated_from_model/full_run/path/to/reports/test_summary.md:5: error: Invalid syntax  [syntax]
+Found 1 error in 1 file (errors prevented further checking)","code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+37,Write a function to run external linters (flake8/black) and parse their output into structured JSON.,/path/to/linter_runner.py,False,"reports/generated_from_model/full_run/path/to/linter_runner.py:5:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/linter_runner.py:21:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/linter_runner.py:36:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/linter_runner.py:48:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/linter_runner.py:55:19: W292 no newline at end of file",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+38,Generate CLI code that supports a `--config` flag and loads JSON/YAML configuration gracefully.,/path/to/cli.py,False,"reports/generated_from_model/full_run/path/to/cli.py:7:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/cli.py:10:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli.py:13:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli.py:16:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli.py:23:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli.py:37:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/cli.py:44:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/cli.py:45:11: W292 no newline at end of file",False,"reports/generated_from_model/full_run/path/to/cli.py:4: error: Library stubs not installed for ""yaml""  [import-untyped]
+reports/generated_from_model/full_run/path/to/cli.py:4: note: Hint: ""python3 -m pip install types-PyYAML""
+reports/generated_from_model/full_run/path/to/cli.py:4: note: (or run ""mypy --install-types"" to install all missing stub packages)
+reports/generated_from_model/full_run/path/to/cli.py:4: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+Found 1 error in 1 file (checked 1 source file)","code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+39,Write a small utility that safely opens an editor for the user to edit a temp file and returns content.,/tmp/editor_util.py,False,"reports/generated_from_model/full_run/tmp/editor_util.py:6:1: E302 expected 2 blank lines, found 1",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+41,Write a function that annotates a piece of code with line numbers and shows a snippet for diagnostics.,/path/to/annotate_code.py,False,"reports/generated_from_model/full_run/path/to/annotate_code.py:17:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/annotate_code.py:23:26: W292 no newline at end of file",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+43,Create a test that ensures CLI exit codes are meaningful and documented for success/failure cases.,/path/to/test_cli_exit_codes.py,False,"reports/generated_from_model/full_run/path/to/test_cli_exit_codes.py:6:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/test_cli_exit_codes.py:19:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+44,"Write code to run a quick health-check that validates external dependencies (DB, network, services) before starting.",/path/to/health_check.py,False,"reports/generated_from_model/full_run/path/to/health_check.py:5:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/health_check.py:17:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/health_check.py:26:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/health_check.py:35:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/health_check.py:44:1: E305 expected 2 blank lines after class or function definition, found 0
+reports/generated_from_model/full_run/path/to/health_check.py:45:11: W292 no newline at end of file",False,"reports/generated_from_model/full_run/path/to/health_check.py:2: error: Library stubs not installed for ""requests""  [import-untyped]
+reports/generated_from_model/full_run/path/to/health_check.py:2: note: Hint: ""python3 -m pip install types-requests""
+reports/generated_from_model/full_run/path/to/health_check.py:2: note: (or run ""mypy --install-types"" to install all missing stub packages)
+reports/generated_from_model/full_run/path/to/health_check.py:2: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+Found 1 error in 1 file (checked 1 source file)","code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+45,"Provide a script to collect telemetry-like metrics (memory, cpu, runtime) for a command and write JSON.",/path/to/telemetry_collector.py,False,"reports/generated_from_model/full_run/path/to/telemetry_collector.py:6:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/telemetry_collector.py:46:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/telemetry_collector.py:50:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,"code=124
+
+Timeout"
+46,Implement a function to normalize timestamps to timezone-aware ISO format across the codebase.,/path/to/normalize_timestamps.py,False,"reports/generated_from_model/full_run/path/to/normalize_timestamps.py:3:1: E302 expected 2 blank lines, found 0",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+47,Write a generator that yields lines from a file but skips binary files and handles different encodings.,/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:11:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:18:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:27:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/your/script.py:33:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/your/script.py:39:49: W292 no newline at end of file",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+48,Provide code that creates a minimal HTTP server to serve static test artifacts for local integration tests.,/path/to/server.py,False,"reports/generated_from_model/full_run/path/to/server.py:8:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/server.py:13:1: E305 expected 2 blank lines after class or function definition, found 1
+reports/generated_from_model/full_run/path/to/server.py:16:26: W292 no newline at end of file",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+49,Generate a small example that uses multiprocessing to parallelize CPU-bound tasks safely.,/path/to/example_multiprocessing.py,False,"reports/generated_from_model/full_run/path/to/example_multiprocessing.py:4:1: F401 'time' imported but unused
+reports/generated_from_model/full_run/path/to/example_multiprocessing.py:6:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/example_multiprocessing.py:10:1: E302 expected 2 blank lines, found 1
+reports/generated_from_model/full_run/path/to/example_multiprocessing.py:14:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/example_multiprocessing.py:17:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/example_multiprocessing.py:22:1: W293 blank line contains whitespace
+reports/generated_from_model/full_run/path/to/example_multiprocessing.py:27:1: E305 expected 2 blank lines after class or function definition, found 1",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"
+50,Write a function that performs task cancellation and cleanup when SIGINT/SIGTERM are received.,/path/to/your/script.py,False,"reports/generated_from_model/full_run/path/to/your/script.py:4:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/your/script.py:9:1: E305 expected 2 blank lines after class or function definition, found 0
+reports/generated_from_model/full_run/path/to/your/script.py:11:1: E302 expected 2 blank lines, found 0
+reports/generated_from_model/full_run/path/to/your/script.py:19:1: E305 expected 2 blank lines after class or function definition, found 0
+reports/generated_from_model/full_run/path/to/your/script.py:20:11: W292 no newline at end of file",True,Success: no issues found in 1 source file,"code=4
+ERROR: file or directory not found: reports/generated_from_model/full_run
+
+
+no tests ran in 0.00s
+"

@@ -152,13 +152,17 @@ def call_ollama(prompt: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-def run_all(prompts: List[str], cli_mode: str = "code", timeout: int = 60, retries: int = 1):
+def run_all(prompts: List[str], cli_mode: str = "code", timeout: int = 60, retries: int = 1, out_path: Path | None = None):
     """Run each prompt through the CLI in the specified `cli_mode` and capture outputs and structured events.
 
     - Uses the project's `singularity_cli.py` to exercise real flows (mcp_server, tool execution).
     - Writes a per-run TEST_MODEL_EVENTS_PATH (logs/test_model_events_prompt_<i>.jsonl) so the CLI records structured events.
+    - `out_path` can be provided to write results to a custom JSONL file (defaults to `reports/prompt_test_results.jsonl`).
     """
     results = []
+
+    if out_path is None:
+        out_path = OUT
 
     # Decide Python executable to run the CLI with (prefer venv)
     py = ROOT / ".venv" / "bin" / "python"
@@ -185,7 +189,15 @@ def run_all(prompts: List[str], cli_mode: str = "code", timeout: int = 60, retri
         env["TEST_MODEL_EVENTS_PATH"] = str(events_path)
         env["RUN_LIVE_OLLAMA"] = "1" if USE_LIVE else "0"
 
-        cmd = [str(py), str(cli_script), p, "-m", cli_mode, "--no-startup-config"]
+        # Ensure per-run events file is clean
+        try:
+            if events_path.exists():
+                events_path.unlink()
+        except Exception:
+            pass
+
+        # Call CLI with flags first, use '--' before the prompt string to avoid ambiguity
+        cmd = [str(py), str(cli_script), "-m", cli_mode, "--no-startup-config", "--", p]
 
         attempt = 0
         success = False
@@ -255,7 +267,7 @@ def run_all(prompts: List[str], cli_mode: str = "code", timeout: int = 60, retri
                 time.sleep(1)
 
         # Save incremental
-        with open(OUT, "a", encoding="utf-8") as fh:
+        with open(out_path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
         results.append(rec)
         # small pause to avoid overwhelming local services
@@ -265,8 +277,24 @@ def run_all(prompts: List[str], cli_mode: str = "code", timeout: int = 60, retri
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Prompt tester: run code-generation prompts via CLI")
+    parser.add_argument("--output", "-o", default=str(OUT), help="Output JSONL file path (default: reports/prompt_test_results.jsonl)")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite the output file before running (default: append)")
+    parser.add_argument("--timeout", "-t", type=int, default=60, help="Per-prompt timeout in seconds")
+    parser.add_argument("--retries", "-r", type=int, default=1, help="Retry attempts per prompt")
+    parser.add_argument("--start", type=int, default=1, help="1-based start index of prompts to run")
+    parser.add_argument("--end", type=int, default=len(PROMPTS), help="1-based end index of prompts to run (inclusive)")
+    args = parser.parse_args()
+
+    out_path = Path(args.output)
+    if args.overwrite and out_path.exists():
+        print(f"Overwriting existing results file: {out_path}")
+        out_path.unlink()
+
     print(f"Using live Ollama: {USE_LIVE}; endpoint: {OLLAMA_URL}")
-    res = run_all(PROMPTS)
+    res = run_all(PROMPTS, timeout=args.timeout, retries=args.retries, out_path=out_path)
     succ = len([r for r in res if r.get('ok')])
-    print(f"Done. {succ}/{len(res)} prompts succeeded. Results written to: {OUT}")
+    print(f"Done. {succ}/{len(res)} prompts succeeded. Results written to: {out_path}")
     sys.exit(0 if succ == len(res) else 2)
