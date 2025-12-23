@@ -1,43 +1,49 @@
 #!/usr/bin/env python3
 """
-Omarchy MCP Server - Advanced Code Agent Tools
+Singularity MCP Server - Advanced Code Agent Tools (legacy: Omarchy)
 Provides comprehensive development capabilities with self-improvement
 """
 
-from dataclasses import dataclass, field
-from enum import Enum
+import ast
+import asyncio
+import difflib
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
+import time
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional
-import asyncio
+
 import aiohttp
 from aiohttp import web
-from datetime import datetime
-import hashlib
-import difflib
-import ast
-import re
-import urllib.request
-import time
+
 
 # Configuration
-CONFIG_PATH = Path.home() / ".omarchy" / "config.json"
-
 def load_config():
     default = {
         "model": "qwen2.5-coder:14b-instruct-q4_K_M",
         "temperature": 0.0,
         "context_length": 8192,
         "allow_sudo": False,
-        "auto_apply": False
+        "auto_apply": False,
     }
     try:
-        if CONFIG_PATH.exists():
+        # Prefer new location ~/.singularity if present, otherwise fallback to legacy ~/.omarchy
+        cfg_path = (
+            (Path.home() / ".singularity" / "config.json")
+            if (Path.home() / ".singularity").exists()
+            else (Path.home() / ".omarchy" / "config.json")
+        )
+        if cfg_path.exists():
             try:
-                cfg = json.loads(CONFIG_PATH.read_text())
+                cfg = json.loads(cfg_path.read_text())
                 return {**default, **cfg}
             except Exception:
                 return default
@@ -45,12 +51,14 @@ def load_config():
         return default
     return default
 
+
 # Structured result for all tool operations
 class ToolStatus(Enum):
     SUCCESS = "SUCCESS"
     ERROR = "ERROR"
     PARTIAL = "PARTIAL"
     CANCELLED = "CANCELLED"
+
 
 @dataclass
 class ToolResult:
@@ -60,22 +68,34 @@ class ToolResult:
     warnings: list = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 
+
 # MCP Server Implementation
 class MCPServer:
     def __init__(self):
         self.config = load_config()
-        self.knowledge_base = Path.home() / ".omarchy" / "knowledge"
-        self.tools_dir = Path.home() / ".omarchy" / "tools"
-        self.plans_dir = Path.home() / ".omarchy" / "plans"
-        self.cache_dir = Path.home() / ".omarchy" / "cache"
-        self.context_dir = Path.home() / ".omarchy" / "context"
-        self.templates_dir = Path.home() / ".omarchy" / "templates"
+        # Compute base config directory at runtime so tests that monkeypatch HOME work correctly
+        base_dir = (
+            (Path.home() / ".singularity")
+            if (Path.home() / ".singularity").exists()
+            else (Path.home() / ".omarchy")
+        )
+        self.knowledge_base = base_dir / "knowledge"
+        self.tools_dir = base_dir / "tools"
+        self.plans_dir = base_dir / "plans"
+        self.cache_dir = base_dir / "cache"
+        self.context_dir = base_dir / "context"
+        self.templates_dir = base_dir / "templates"
         self.init_directories()
         # Ensure config file exists with defaults if not present
         try:
-            if not CONFIG_PATH.exists():
-                CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-                CONFIG_PATH.write_text(json.dumps(self.config, indent=2))
+            cfg_path = (
+                (Path.home() / ".singularity" / "config.json")
+                if (Path.home() / ".singularity").exists()
+                else (Path.home() / ".singularity" / "config.json")
+            )
+            if not cfg_path.exists():
+                cfg_path.parent.mkdir(parents=True, exist_ok=True)
+                cfg_path.write_text(json.dumps(self.config, indent=2))
         except Exception:
             pass
         self.context_memory = []  # Active context window
@@ -83,6 +103,7 @@ class MCPServer:
 
         # Telemetry / metrics
         from collections import deque
+
         self.start_time = time.time()
         self.telemetry = {
             "request_count": 0,
@@ -110,7 +131,9 @@ class MCPServer:
         if not handler:
             elapsed_ms = (time.time() - start) * 1000.0
             self._record_telemetry(elapsed_ms)
-            return web.json_response({"error": f"Unknown tool: {tool_name}"}, status=400)
+            return web.json_response(
+                {"error": f"Unknown tool: {tool_name}"}, status=400
+            )
         try:
             result = handler(arguments)
             if asyncio.iscoroutine(result):
@@ -118,13 +141,15 @@ class MCPServer:
             elapsed_ms = (time.time() - start) * 1000.0
             self._record_telemetry(elapsed_ms)
             if isinstance(result, ToolResult):
-                return aiohttp.web.json_response({
-                    "status": result.status.value,
-                    "data": result.data,
-                    "error": result.error,
-                    "warnings": result.warnings,
-                    "metadata": result.metadata
-                })
+                return aiohttp.web.json_response(
+                    {
+                        "status": result.status.value,
+                        "data": result.data,
+                        "error": result.error,
+                        "warnings": result.warnings,
+                        "metadata": result.metadata,
+                    }
+                )
             return aiohttp.web.json_response(result)
         except Exception as e:
             elapsed_ms = (time.time() - start) * 1000.0
@@ -136,80 +161,95 @@ class MCPServer:
         now = time.time()
         uptime = now - self.start_time
         telemetry = self._telemetry_summary()
-        return web.json_response({
-            "status": "ok",
-            "uptime": uptime,
-            "telemetry": telemetry
-        })
+        return web.json_response(
+            {"status": "ok", "uptime": uptime, "telemetry": telemetry}
+        )
 
     def _record_telemetry(self, latency_ms: float):
         try:
-            self.telemetry['request_count'] += 1
-            self.telemetry['latencies_ms'].append(latency_ms)
-            self.telemetry['recent_requests'].append(time.time())
+            self.telemetry["request_count"] += 1
+            self.telemetry["latencies_ms"].append(latency_ms)
+            self.telemetry["recent_requests"].append(time.time())
         except Exception:
             pass
 
     def _telemetry_summary(self):
         import statistics
-        latencies = list(self.telemetry.get('latencies_ms', []))
+
+        latencies = list(self.telemetry.get("latencies_ms", []))
         summary = {
-            'request_count': int(self.telemetry.get('request_count', 0)),
-            'avg_latency_ms': None,
-            'p50_ms': None,
-            'p95_ms': None,
-            'reqs_last_minute': 0,
-            'gpu_memory_mb': None,
+            "request_count": int(self.telemetry.get("request_count", 0)),
+            "avg_latency_ms": None,
+            "p50_ms": None,
+            "p95_ms": None,
+            "reqs_last_minute": 0,
+            "gpu_memory_mb": None,
         }
         try:
             if latencies:
-                summary['avg_latency_ms'] = statistics.mean(latencies)
-                summary['p50_ms'] = statistics.median(latencies)
+                summary["avg_latency_ms"] = statistics.mean(latencies)
+                summary["p50_ms"] = statistics.median(latencies)
                 if len(latencies) >= 1:
                     sorted_l = sorted(latencies)
                     idx = int(len(sorted_l) * 0.95) - 1
-                    idx = max(0, min(idx, len(sorted_l)-1))
-                    summary['p95_ms'] = sorted_l[idx]
+                    idx = max(0, min(idx, len(sorted_l) - 1))
+                    summary["p95_ms"] = sorted_l[idx]
             # requests in last minute
             cutoff = time.time() - 60.0
-            reqs = [t for t in self.telemetry.get('recent_requests', []) if t >= cutoff]
-            summary['reqs_last_minute'] = len(reqs)
+            reqs = [t for t in self.telemetry.get("recent_requests", []) if t >= cutoff]
+            summary["reqs_last_minute"] = len(reqs)
             # GPU memory via nvidia-smi if available
             try:
                 import subprocess
-                out = subprocess.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'], capture_output=True, text=True, timeout=1)
+
+                out = subprocess.run(
+                    [
+                        "nvidia-smi",
+                        "--query-gpu=memory.used",
+                        "--format=csv,nounits,noheader",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=1,
+                )
                 if out.returncode == 0 and out.stdout:
                     mb = int(out.stdout.strip().splitlines()[0])
-                    summary['gpu_memory_mb'] = mb
+                    summary["gpu_memory_mb"] = mb
             except Exception:
-                summary['gpu_memory_mb'] = None
+                summary["gpu_memory_mb"] = None
         except Exception:
             pass
         return summary
-    
+
     def init_directories(self):
         """Initialize required directories"""
-        for dir_path in [self.knowledge_base, self.tools_dir, self.plans_dir, 
-                         self.cache_dir, self.context_dir, self.templates_dir]:
+        for dir_path in [
+            self.knowledge_base,
+            self.tools_dir,
+            self.plans_dir,
+            self.cache_dir,
+            self.context_dir,
+            self.templates_dir,
+        ]:
             dir_path.mkdir(parents=True, exist_ok=True)
-    
+
     async def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Main request handler"""
         method = request.get("method")
         params = request.get("params", {})
-        
+
         handlers = {
             "tools/list": self.list_tools,
             "tools/call": self.call_tool,
             "resources/list": self.list_resources,
             "resources/read": self.read_resource,
         }
-        
+
         handler = handlers.get(method)
         if handler:
             return await handler(params)
         return {"error": f"Unknown method: {method}"}
-    
+
     async def list_tools(self, params: Dict) -> Dict:
         """List all available tools"""
         tools = [
@@ -222,10 +262,18 @@ class MCPServer:
                         "filepath": {"type": "string"},
                         "content": {"type": "string"},
                         "language": {"type": "string"},
-                        "mode": {"type": "string", "enum": ["overwrite", "append", "insert_after", "replace_section"]}
+                        "mode": {
+                            "type": "string",
+                            "enum": [
+                                "overwrite",
+                                "append",
+                                "insert_after",
+                                "replace_section",
+                            ],
+                        },
                     },
-                    "required": ["filepath", "content"]
-                }
+                    "required": ["filepath", "content"],
+                },
             },
             {
                 "name": "read_code",
@@ -236,9 +284,9 @@ class MCPServer:
                         "filepath": {"type": "string"},
                         "pattern": {"type": "string"},
                         "parse_ast": {"type": "boolean"},
-                        "line_range": {"type": "array", "items": {"type": "integer"}}
-                    }
-                }
+                        "line_range": {"type": "array", "items": {"type": "integer"}},
+                    },
+                },
             },
             {
                 "name": "apply_diff",
@@ -248,10 +296,10 @@ class MCPServer:
                     "properties": {
                         "filepath": {"type": "string"},
                         "diff": {"type": "string"},
-                        "dry_run": {"type": "boolean"}
+                        "dry_run": {"type": "boolean"},
                     },
-                    "required": ["filepath", "diff"]
-                }
+                    "required": ["filepath", "diff"],
+                },
             },
             {
                 "name": "execute_code",
@@ -263,10 +311,10 @@ class MCPServer:
                         "cwd": {"type": "string"},
                         "env": {"type": "object"},
                         "timeout": {"type": "integer"},
-                        "capture_output": {"type": "boolean"}
+                        "capture_output": {"type": "boolean"},
                     },
-                    "required": ["command"]
-                }
+                    "required": ["command"],
+                },
             },
             {
                 "name": "search_docs",
@@ -275,11 +323,21 @@ class MCPServer:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string"},
-                        "source": {"type": "string", "enum": ["web", "github", "stackoverflow", "docs", "pypi", "npm"]},
-                        "use_cache": {"type": "boolean"}
+                        "source": {
+                            "type": "string",
+                            "enum": [
+                                "web",
+                                "github",
+                                "stackoverflow",
+                                "docs",
+                                "pypi",
+                                "npm",
+                            ],
+                        },
+                        "use_cache": {"type": "boolean"},
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "name": "git_operation",
@@ -290,10 +348,10 @@ class MCPServer:
                         "operation": {"type": "string"},
                         "args": {"type": "array", "items": {"type": "string"}},
                         "auto_stage": {"type": "boolean"},
-                        "generate_message": {"type": "boolean"}
+                        "generate_message": {"type": "boolean"},
                     },
-                    "required": ["operation"]
-                }
+                    "required": ["operation"],
+                },
             },
             {
                 "name": "create_plan",
@@ -304,10 +362,10 @@ class MCPServer:
                         "goal": {"type": "string"},
                         "context": {"type": "string"},
                         "auto_break_down": {"type": "boolean"},
-                        "estimate_time": {"type": "boolean"}
+                        "estimate_time": {"type": "boolean"},
                     },
-                    "required": ["goal"]
-                }
+                    "required": ["goal"],
+                },
             },
             {
                 "name": "update_plan",
@@ -319,10 +377,10 @@ class MCPServer:
                         "item_id": {"type": "string"},
                         "status": {"type": "string"},
                         "notes": {"type": "string"},
-                        "time_spent": {"type": "integer"}
+                        "time_spent": {"type": "integer"},
                     },
-                    "required": ["plan_id", "item_id", "status"]
-                }
+                    "required": ["plan_id", "item_id", "status"],
+                },
             },
             {
                 "name": "save_knowledge",
@@ -334,10 +392,10 @@ class MCPServer:
                         "content": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "code_examples": {"type": "array"},
-                        "related_files": {"type": "array"}
+                        "related_files": {"type": "array"},
                     },
-                    "required": ["topic", "content"]
-                }
+                    "required": ["topic", "content"],
+                },
             },
             {
                 "name": "query_knowledge",
@@ -348,10 +406,10 @@ class MCPServer:
                         "query": {"type": "string"},
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "limit": {"type": "integer"},
-                        "include_examples": {"type": "boolean"}
+                        "include_examples": {"type": "boolean"},
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "name": "batch_generate",
@@ -362,10 +420,10 @@ class MCPServer:
                         "specs": {"type": "array"},
                         "template": {"type": "string"},
                         "validate": {"type": "boolean"},
-                        "dry_run": {"type": "boolean"}
+                        "dry_run": {"type": "boolean"},
                     },
-                    "required": ["specs"]
-                }
+                    "required": ["specs"],
+                },
             },
             {
                 "name": "analyze_codebase",
@@ -374,12 +432,22 @@ class MCPServer:
                     "type": "object",
                     "properties": {
                         "path": {"type": "string"},
-                        "analysis_type": {"type": "string", "enum": ["structure", "dependencies", "complexity", "security", "todos", "dead_code"]},
+                        "analysis_type": {
+                            "type": "string",
+                            "enum": [
+                                "structure",
+                                "dependencies",
+                                "complexity",
+                                "security",
+                                "todos",
+                                "dead_code",
+                            ],
+                        },
                         "recursive": {"type": "boolean"},
-                        "include_tests": {"type": "boolean"}
+                        "include_tests": {"type": "boolean"},
                     },
-                    "required": ["path"]
-                }
+                    "required": ["path"],
+                },
             },
             {
                 "name": "add_tool",
@@ -391,10 +459,10 @@ class MCPServer:
                         "description": {"type": "string"},
                         "code": {"type": "string"},
                         "schema": {"type": "object"},
-                        "test_cases": {"type": "array"}
+                        "test_cases": {"type": "array"},
                     },
-                    "required": ["name", "description", "code"]
-                }
+                    "required": ["name", "description", "code"],
+                },
             },
             {
                 "name": "test_code",
@@ -403,12 +471,21 @@ class MCPServer:
                     "type": "object",
                     "properties": {
                         "filepath": {"type": "string"},
-                        "test_type": {"type": "string", "enum": ["unit", "integration", "lint", "type_check", "coverage"]},
+                        "test_type": {
+                            "type": "string",
+                            "enum": [
+                                "unit",
+                                "integration",
+                                "lint",
+                                "type_check",
+                                "coverage",
+                            ],
+                        },
                         "auto_fix": {"type": "boolean"},
-                        "generate_tests": {"type": "boolean"}
+                        "generate_tests": {"type": "boolean"},
                     },
-                    "required": ["filepath"]
-                }
+                    "required": ["filepath"],
+                },
             },
             {
                 "name": "refactor_code",
@@ -417,12 +494,21 @@ class MCPServer:
                     "type": "object",
                     "properties": {
                         "filepath": {"type": "string"},
-                        "refactor_type": {"type": "string", "enum": ["extract_function", "rename", "inline", "optimize", "modernize"]},
+                        "refactor_type": {
+                            "type": "string",
+                            "enum": [
+                                "extract_function",
+                                "rename",
+                                "inline",
+                                "optimize",
+                                "modernize",
+                            ],
+                        },
                         "target": {"type": "string"},
-                        "preview": {"type": "boolean"}
+                        "preview": {"type": "boolean"},
                     },
-                    "required": ["filepath", "refactor_type"]
-                }
+                    "required": ["filepath", "refactor_type"],
+                },
             },
             {
                 "name": "generate_tests",
@@ -432,10 +518,10 @@ class MCPServer:
                     "properties": {
                         "filepath": {"type": "string"},
                         "test_framework": {"type": "string"},
-                        "coverage_target": {"type": "integer"}
+                        "coverage_target": {"type": "integer"},
                     },
-                    "required": ["filepath"]
-                }
+                    "required": ["filepath"],
+                },
             },
             {
                 "name": "find_similar",
@@ -445,10 +531,10 @@ class MCPServer:
                     "properties": {
                         "code_snippet": {"type": "string"},
                         "search_path": {"type": "string"},
-                        "threshold": {"type": "number"}
+                        "threshold": {"type": "number"},
                     },
-                    "required": ["code_snippet"]
-                }
+                    "required": ["code_snippet"],
+                },
             },
             {
                 "name": "explain_code",
@@ -457,11 +543,14 @@ class MCPServer:
                     "type": "object",
                     "properties": {
                         "filepath": {"type": "string"},
-                        "detail_level": {"type": "string", "enum": ["brief", "detailed", "expert"]},
-                        "include_diagram": {"type": "boolean"}
+                        "detail_level": {
+                            "type": "string",
+                            "enum": ["brief", "detailed", "expert"],
+                        },
+                        "include_diagram": {"type": "boolean"},
                     },
-                    "required": ["filepath"]
-                }
+                    "required": ["filepath"],
+                },
             },
             {
                 "name": "debug_assistant",
@@ -472,10 +561,10 @@ class MCPServer:
                         "error_message": {"type": "string"},
                         "code_context": {"type": "string"},
                         "stack_trace": {"type": "string"},
-                        "suggest_fixes": {"type": "boolean"}
+                        "suggest_fixes": {"type": "boolean"},
                     },
-                    "required": ["error_message"]
-                }
+                    "required": ["error_message"],
+                },
             },
             {
                 "name": "create_template",
@@ -486,10 +575,10 @@ class MCPServer:
                         "name": {"type": "string"},
                         "source_files": {"type": "array"},
                         "variables": {"type": "array"},
-                        "description": {"type": "string"}
+                        "description": {"type": "string"},
                     },
-                    "required": ["name", "source_files"]
-                }
+                    "required": ["name", "source_files"],
+                },
             },
             {
                 "name": "save_session",
@@ -498,21 +587,19 @@ class MCPServer:
                     "type": "object",
                     "properties": {
                         "name": {"type": "string"},
-                        "description": {"type": "string"}
+                        "description": {"type": "string"},
                     },
-                    "required": ["name"]
-                }
+                    "required": ["name"],
+                },
             },
             {
                 "name": "load_session",
                 "description": "Load a saved session by name",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {
-                        "name": {"type": "string"}
-                    },
-                    "required": ["name"]
-                }
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                },
             },
             {
                 "name": "manage_context",
@@ -520,12 +607,15 @@ class MCPServer:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "action": {"type": "string", "enum": ["add", "remove", "summarize", "list", "clear"]},
+                        "action": {
+                            "type": "string",
+                            "enum": ["add", "remove", "summarize", "list", "clear"],
+                        },
                         "items": {"type": "array"},
-                        "auto_prune": {"type": "boolean"}
+                        "auto_prune": {"type": "boolean"},
                     },
-                    "required": ["action"]
-                }
+                    "required": ["action"],
+                },
             },
             {
                 "name": "search_files",
@@ -537,10 +627,10 @@ class MCPServer:
                         "path": {"type": "string"},
                         "context_lines": {"type": "integer"},
                         "fuzzy": {"type": "boolean"},
-                        "limit": {"type": "integer"}
+                        "limit": {"type": "integer"},
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "name": "apply_edit",
@@ -553,10 +643,10 @@ class MCPServer:
                         "replace": {"type": "string"},
                         "use_regex": {"type": "boolean"},
                         "preview": {"type": "boolean"},
-                        "apply": {"type": "boolean"}
+                        "apply": {"type": "boolean"},
                     },
-                    "required": ["filepath", "search", "replace"]
-                }
+                    "required": ["filepath", "search", "replace"],
+                },
             },
             {
                 "name": "create_project",
@@ -568,10 +658,10 @@ class MCPServer:
                         "template": {"type": "string"},
                         "git_init": {"type": "boolean"},
                         "create_venv": {"type": "boolean"},
-                        "install_deps": {"type": "boolean"}
+                        "install_deps": {"type": "boolean"},
                     },
-                    "required": ["name"]
-                }
+                    "required": ["name"],
+                },
             },
             {
                 "name": "code_review",
@@ -583,10 +673,10 @@ class MCPServer:
                         "check_security": {"type": "boolean"},
                         "check_performance": {"type": "boolean"},
                         "check_style": {"type": "boolean"},
-                        "severity_threshold": {"type": "string"}
+                        "severity_threshold": {"type": "string"},
                     },
-                    "required": ["filepath"]
-                }
+                    "required": ["filepath"],
+                },
             },
             {
                 "name": "estimate_complexity",
@@ -596,14 +686,14 @@ class MCPServer:
                     "properties": {
                         "task_description": {"type": "string"},
                         "similar_tasks": {"type": "array"},
-                        "include_breakdown": {"type": "boolean"}
+                        "include_breakdown": {"type": "boolean"},
                     },
-                    "required": ["task_description"]
-                }
-            }
+                    "required": ["task_description"],
+                },
+            },
         ]
         return {"tools": tools}
-    
+
     async def read_code(self, args: Dict) -> ToolResult:
         """Enhanced read with AST parsing and context, returns ToolResult"""
         try:
@@ -632,7 +722,7 @@ class MCPServer:
                     data["ast_error"] = str(e)
             if line_range:
                 start, end = line_range
-                lines = code.splitlines()[start - 1:end]
+                lines = code.splitlines()[start - 1 : end]
                 data["lines"] = lines
             return ToolResult(status=ToolStatus.SUCCESS, data=data)
         except Exception as e:
@@ -647,11 +737,17 @@ class MCPServer:
         args = params.get("arguments", {})
 
         if not tool_name:
-            return {"content": [{"type": "text", "text": "Error: No tool name provided"}], "isError": True}
+            return {
+                "content": [{"type": "text", "text": "Error: No tool name provided"}],
+                "isError": True,
+            }
 
         handler = getattr(self, tool_name, None)
         if not handler or not callable(handler):
-            return {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}], "isError": True}
+            return {
+                "content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}],
+                "isError": True,
+            }
 
         try:
             result = handler(args)
@@ -666,13 +762,20 @@ class MCPServer:
                     "warnings": result.warnings,
                     "metadata": result.metadata,
                 }
-                return {"content": [{"type": "tool_result", "text": json.dumps(out, indent=2)}]}
+                return {
+                    "content": [
+                        {"type": "tool_result", "text": json.dumps(out, indent=2)}
+                    ]
+                }
 
             # legacy dict/list
             return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
         except Exception as e:
-            return {"content": [{"type": "text", "text": f"Error: {str(e)}"}], "isError": True}
-    
+            return {
+                "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+                "isError": True,
+            }
+
     async def write_code(self, args: Dict) -> ToolResult:
         """Enhanced write with diff preview and multiple modes, returns ToolResult"""
         try:
@@ -685,15 +788,19 @@ class MCPServer:
             metadata = {}
             if filepath.exists():
                 original = filepath.read_text()
-                backup_path = filepath.with_suffix(filepath.suffix + f".backup.{int(datetime.now().timestamp())}")
+                backup_path = filepath.with_suffix(
+                    filepath.suffix + f".backup.{int(datetime.now().timestamp())}"
+                )
                 filepath.rename(backup_path)
                 warnings.append(f"Backup created: {backup_path}")
-                diff = list(difflib.unified_diff(
-                    original.splitlines(keepends=True),
-                    content.splitlines(keepends=True),
-                    fromfile=str(filepath),
-                    tofile=str(filepath)
-                ))
+                diff = list(
+                    difflib.unified_diff(
+                        original.splitlines(keepends=True),
+                        content.splitlines(keepends=True),
+                        fromfile=str(filepath),
+                        tofile=str(filepath),
+                    )
+                )
                 diff_preview = "".join(diff)
                 metadata["diff_preview"] = diff_preview
             auto_format = bool(args.get("auto_format", False))
@@ -704,8 +811,12 @@ class MCPServer:
             # Auto-format for Python
             if auto_format and filepath.suffix == ".py":
                 try:
-                    subprocess.run([sys.executable, "-m", "pip", "install", "black"], check=False)
-                    subprocess.run([sys.executable, "-m", "black", str(filepath)], check=False)
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "black"], check=False
+                    )
+                    subprocess.run(
+                        [sys.executable, "-m", "black", str(filepath)], check=False
+                    )
                     warnings.append("auto_format: black applied")
                     # Refresh content and diff
                     formatted = filepath.read_text()
@@ -715,24 +826,23 @@ class MCPServer:
                 except Exception as fe:
                     warnings.append(f"auto_format failed: {fe}")
             content_hash = hashlib.sha256(content.encode()).hexdigest()[:8]
-            metadata.update({
-                "filepath": str(filepath),
-                "size": len(content),
-                "lines": len(content.splitlines()),
-                "hash": content_hash
-            })
+            metadata.update(
+                {
+                    "filepath": str(filepath),
+                    "size": len(content),
+                    "lines": len(content.splitlines()),
+                    "hash": content_hash,
+                }
+            )
             return ToolResult(
                 status=ToolStatus.SUCCESS,
                 data={"message": f"Code written to {filepath}"},
                 warnings=warnings,
-                metadata=metadata
+                metadata=metadata,
             )
         except Exception as e:
-            return ToolResult(
-                status=ToolStatus.ERROR,
-                error=str(e)
-            )
-    
+            return ToolResult(status=ToolStatus.ERROR, error=str(e))
+
     async def apply_diff(self, args: Dict) -> ToolResult:
         """Apply unified diff format changes - surgical precision, returns ToolResult"""
         try:
@@ -747,17 +857,15 @@ class MCPServer:
                 return ToolResult(
                     status=ToolStatus.SUCCESS,
                     data={"message": "Dry run: diff preview only"},
-                    metadata={"diff": diff_text}
+                    metadata={"diff": diff_text},
                 )
             # Not implemented: actually apply diff
             return ToolResult(
-                status=ToolStatus.ERROR,
-                error="Diff application not implemented yet."
+                status=ToolStatus.ERROR, error="Diff application not implemented yet."
             )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
-    
     async def git_operation(self, args: Dict) -> ToolResult:
         """Enhanced git with smart features, returns ToolResult"""
         try:
@@ -769,28 +877,26 @@ class MCPServer:
                 subprocess.run(["git", "add", "-A"], capture_output=True)
             if generate_message and operation == "commit":
                 diff_result = subprocess.run(
-                    ["git", "diff", "--cached"],
-                    capture_output=True,
-                    text=True
+                    ["git", "diff", "--cached"], capture_output=True, text=True
                 )
                 diff = diff_result.stdout
                 ai_message = f"AI commit message for changes:\n{diff[:100]}..."
                 git_args = ["-m", ai_message] + git_args
-            result = subprocess.run([
-                "git", operation, *git_args
-            ], capture_output=True, text=True)
+            result = subprocess.run(
+                ["git", operation, *git_args], capture_output=True, text=True
+            )
             data = {
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "returncode": result.returncode,
                 "success": result.returncode == 0,
-                "operation": operation
+                "operation": operation,
             }
             status = ToolStatus.SUCCESS if result.returncode == 0 else ToolStatus.ERROR
             return ToolResult(status=status, data=data)
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-    
+
     async def execute_code(self, args: Dict) -> ToolResult:
         """Enhanced execution with resource limits and environment isolation, returns ToolResult"""
         try:
@@ -807,7 +913,10 @@ class MCPServer:
             # Support optional sudo via args['sudo'] when enabled in config
             use_sudo = bool(args.get("sudo", False))
             if use_sudo and not self.config.get("allow_sudo", False):
-                return ToolResult(status=ToolStatus.ERROR, error="Sudo not allowed by server configuration")
+                return ToolResult(
+                    status=ToolStatus.ERROR,
+                    error="Sudo not allowed by server configuration",
+                )
             if use_sudo:
                 # Use sudo -n (non-interactive) so it fails if password is required
                 command = f"sudo -n {command}"
@@ -819,7 +928,7 @@ class MCPServer:
                     cwd=cwd,
                     env=full_env,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 chunks = []
                 try:
@@ -828,19 +937,27 @@ class MCPServer:
                         if not line:
                             break
                         text = line.decode(errors="replace")
-                        chunks.append({"timestamp": datetime.now().isoformat(), "chunk": text})
+                        chunks.append(
+                            {"timestamp": datetime.now().isoformat(), "chunk": text}
+                        )
                     await asyncio.wait_for(proc.wait(), timeout=timeout)
                 except asyncio.TimeoutError:
                     proc.kill()
-                    return ToolResult(status=ToolStatus.ERROR, error=f"Command timed out after {timeout} seconds", metadata={"streamed": True})
+                    return ToolResult(
+                        status=ToolStatus.ERROR,
+                        error=f"Command timed out after {timeout} seconds",
+                        metadata={"streamed": True},
+                    )
                 execution_time = (datetime.now() - start_time).total_seconds()
                 data = {
                     "returncode": proc.returncode,
                     "streamed_chunks": chunks,
                     "execution_time": execution_time,
-                    "command": command
+                    "command": command,
                 }
-                status = ToolStatus.SUCCESS if proc.returncode == 0 else ToolStatus.ERROR
+                status = (
+                    ToolStatus.SUCCESS if proc.returncode == 0 else ToolStatus.ERROR
+                )
                 return ToolResult(status=status, data=data)
 
             # Non-streaming (legacy)
@@ -851,7 +968,7 @@ class MCPServer:
                 env=full_env,
                 capture_output=capture_output,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
             )
             execution_time = (datetime.now() - start_time).total_seconds()
             data = {
@@ -860,15 +977,19 @@ class MCPServer:
                 "returncode": result.returncode,
                 "success": result.returncode == 0,
                 "execution_time": execution_time,
-                "command": command
+                "command": command,
             }
             status = ToolStatus.SUCCESS if result.returncode == 0 else ToolStatus.ERROR
             return ToolResult(status=status, data=data)
         except subprocess.TimeoutExpired:
-            return ToolResult(status=ToolStatus.ERROR, error=f"Command timed out after {timeout} seconds", metadata={"timeout": True})
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                error=f"Command timed out after {timeout} seconds",
+                metadata={"timeout": True},
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-    
+
     async def search_docs(self, args: Dict) -> ToolResult:
         """Enhanced doc search with caching, returns ToolResult"""
         try:
@@ -880,30 +1001,32 @@ class MCPServer:
             if use_cache and cache_file.exists():
                 if (datetime.now().timestamp() - cache_file.stat().st_mtime) < 86400:
                     data = json.loads(cache_file.read_text())
-                    return ToolResult(status=ToolStatus.SUCCESS, data=data, metadata={"cached": True})
+                    return ToolResult(
+                        status=ToolStatus.SUCCESS, data=data, metadata={"cached": True}
+                    )
             search_urls = {
                 "web": f"https://www.google.com/search?q={query}+documentation",
                 "github": f"https://github.com/search?q={query}",
                 "stackoverflow": f"https://stackoverflow.com/search?q={query}",
                 "docs": f"https://devdocs.io/#q={query}",
                 "pypi": f"https://pypi.org/search/?q={query}",
-                "npm": f"https://www.npmjs.com/search?q={query}"
+                "npm": f"https://www.npmjs.com/search?q={query}",
             }
             data = {
                 "query": query,
                 "source": source,
                 "url": search_urls.get(source),
                 "cached": False,
-                "message": f"Search query prepared for {source}"
+                "message": f"Search query prepared for {source}",
             }
             if use_cache:
                 cache_file.write_text(json.dumps(data))
             return ToolResult(status=ToolStatus.SUCCESS, data=data)
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-    
+
     # Duplicate git_operation definition removed; earlier definition returning ToolResult is kept for consistent ToolResult usage.
-    
+
     async def create_plan(self, args: Dict) -> ToolResult:
         """Enhanced planning with auto breakdown, returns ToolResult"""
         try:
@@ -915,10 +1038,30 @@ class MCPServer:
             items = []
             if auto_break_down:
                 common_phases = [
-                    {"id": "1", "description": "Project setup and structure", "estimate": "30m", "dependencies": []},
-                    {"id": "2", "description": "Core implementation", "estimate": "2h", "dependencies": ["1"]},
-                    {"id": "3", "description": "Testing and validation", "estimate": "1h", "dependencies": ["2"]},
-                    {"id": "4", "description": "Documentation", "estimate": "30m", "dependencies": ["3"]},
+                    {
+                        "id": "1",
+                        "description": "Project setup and structure",
+                        "estimate": "30m",
+                        "dependencies": [],
+                    },
+                    {
+                        "id": "2",
+                        "description": "Core implementation",
+                        "estimate": "2h",
+                        "dependencies": ["1"],
+                    },
+                    {
+                        "id": "3",
+                        "description": "Testing and validation",
+                        "estimate": "1h",
+                        "dependencies": ["2"],
+                    },
+                    {
+                        "id": "4",
+                        "description": "Documentation",
+                        "estimate": "30m",
+                        "dependencies": ["3"],
+                    },
                 ]
                 items = common_phases
             plan = {
@@ -929,7 +1072,7 @@ class MCPServer:
                 "status": "active",
                 "items": items,
                 "progress": 0,
-                "estimated_total": "4h" if estimate_time else None
+                "estimated_total": "4h" if estimate_time else None,
             }
             plan_file = self.plans_dir / f"{plan_id}.json"
             plan_file.write_text(json.dumps(plan, indent=2))
@@ -937,12 +1080,14 @@ class MCPServer:
                 "plan_id": plan_id,
                 "items_count": len(items),
                 "estimated_time": plan.get("estimated_total"),
-                "message": "Plan created with task breakdown"
+                "message": "Plan created with task breakdown",
             }
-            return ToolResult(status=ToolStatus.SUCCESS, data=data, metadata={"plan": plan})
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data=data, metadata={"plan": plan}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-    
+
     async def update_plan(self, args: Dict) -> ToolResult:
         """Enhanced plan updates with analytics, returns ToolResult"""
         try:
@@ -967,27 +1112,35 @@ class MCPServer:
                     item_found = True
                     break
             if not item_found:
-                plan["items"].append({
-                    "id": item_id,
-                    "status": status,
-                    "created": datetime.now().isoformat(),
-                    "notes": notes,
-                    "time_spent": time_spent
-                })
-            completed = sum(1 for item in plan["items"] if item.get("status") == "complete")
-            plan["progress"] = int((completed / len(plan["items"])) * 100) if plan["items"] else 0
+                plan["items"].append(
+                    {
+                        "id": item_id,
+                        "status": status,
+                        "created": datetime.now().isoformat(),
+                        "notes": notes,
+                        "time_spent": time_spent,
+                    }
+                )
+            completed = sum(
+                1 for item in plan["items"] if item.get("status") == "complete"
+            )
+            plan["progress"] = (
+                int((completed / len(plan["items"])) * 100) if plan["items"] else 0
+            )
             plan_file.write_text(json.dumps(plan, indent=2))
             data = {
                 "plan_id": plan_id,
                 "progress": plan["progress"],
                 "completed": completed,
                 "total": len(plan["items"]),
-                "message": "Plan updated"
+                "message": "Plan updated",
             }
-            return ToolResult(status=ToolStatus.SUCCESS, data=data, metadata={"plan": plan})
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data=data, metadata={"plan": plan}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-    
+
     async def save_knowledge(self, args: Dict) -> ToolResult:
         """Enhanced knowledge saving with relationships, returns ToolResult"""
         try:
@@ -1005,7 +1158,9 @@ class MCPServer:
                 existing["content"] += "\n\n" + content
                 existing["updated"] = datetime.now().isoformat()
                 existing["tags"] = tags
-                existing["code_examples"] = code_examples + existing.get("code_examples", [])
+                existing["code_examples"] = code_examples + existing.get(
+                    "code_examples", []
+                )
                 knowledge = existing
                 is_update = True
             else:
@@ -1017,18 +1172,16 @@ class MCPServer:
                     "related_files": related_files,
                     "created": datetime.now().isoformat(),
                     "updated": datetime.now().isoformat(),
-                    "access_count": 0
+                    "access_count": 0,
                 }
             knowledge_file.write_text(json.dumps(knowledge, indent=2))
-            data = {
-                "knowledge_id": knowledge_id,
-                "tags": tags,
-                "is_update": is_update
-            }
-            return ToolResult(status=ToolStatus.SUCCESS, data=data, metadata={"knowledge": knowledge})
+            data = {"knowledge_id": knowledge_id, "tags": tags, "is_update": is_update}
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data=data, metadata={"knowledge": knowledge}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-    
+
     async def query_knowledge(self, args: Dict) -> ToolResult:
         """Enhanced knowledge query with ranking"""
         try:
@@ -1057,13 +1210,20 @@ class MCPServer:
                         "topic": kb.get("topic"),
                         "score": score,
                         "tags": kb.get("tags", []),
-                        "excerpt": (kb.get("content", "")[:300] + "...") if len(kb.get("content", "")) > 300 else kb.get("content", "")
+                        "excerpt": (
+                            (kb.get("content", "")[:300] + "...")
+                            if len(kb.get("content", "")) > 300
+                            else kb.get("content", "")
+                        ),
                     }
                     if include_examples:
                         entry["examples"] = kb.get("code_examples", [])[:3]
                     results.append(entry)
             results = sorted(results, key=lambda x: x["score"], reverse=True)[:limit]
-            return ToolResult(status=ToolStatus.SUCCESS, data={"results": results, "files_searched": files_searched})
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"results": results, "files_searched": files_searched},
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1077,12 +1237,21 @@ class MCPServer:
             files = []
             for p in path.rglob("*") if recursive else path.iterdir():
                 if p.is_file():
-                    if not include_tests and ("test" in p.name.lower() or "/tests/" in str(p)):
+                    if not include_tests and (
+                        "test" in p.name.lower() or "/tests/" in str(p)
+                    ):
                         continue
                     files.append(p)
             report = {"files": len(files)}
             if analysis_type in ("structure", "all"):
-                report["structure"] = [{"path": str(p), "size": p.stat().st_size, "lines": len(p.read_text().splitlines())} for p in files[:200]]
+                report["structure"] = [
+                    {
+                        "path": str(p),
+                        "size": p.stat().st_size,
+                        "lines": len(p.read_text().splitlines()),
+                    }
+                    for p in files[:200]
+                ]
             if analysis_type in ("dependencies", "all"):
                 imports = {}
                 for p in [f for f in files if f.suffix == ".py"]:
@@ -1099,26 +1268,59 @@ class MCPServer:
                                 imports[module] += 1
                     except Exception:
                         continue
-                report["dependencies"] = sorted(imports.items(), key=lambda x: x[1], reverse=True)[:200]
+                report["dependencies"] = sorted(
+                    imports.items(), key=lambda x: x[1], reverse=True
+                )[:200]
             if analysis_type in ("complexity", "all"):
+
                 def complexity_of_node(node):
                     score = 1
                     for child in ast.walk(node):
-                        if isinstance(child, (ast.If, ast.For, ast.While, ast.And, ast.Or, ast.Try, ast.With)):
+                        if isinstance(
+                            child,
+                            (
+                                ast.If,
+                                ast.For,
+                                ast.While,
+                                ast.And,
+                                ast.Or,
+                                ast.Try,
+                                ast.With,
+                            ),
+                        ):
                             score += 1
                     return score
+
                 complexities = []
                 for p in [f for f in files if f.suffix == ".py"]:
                     try:
                         tree = ast.parse(p.read_text())
-                        for func in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
-                            complexities.append({"file": str(p), "function": func.name, "complexity": complexity_of_node(func)})
+                        for func in [
+                            n
+                            for n in ast.walk(tree)
+                            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        ]:
+                            complexities.append(
+                                {
+                                    "file": str(p),
+                                    "function": func.name,
+                                    "complexity": complexity_of_node(func),
+                                }
+                            )
                     except Exception:
                         continue
-                report["complexity"] = sorted(complexities, key=lambda x: x["complexity"], reverse=True)[:200]
+                report["complexity"] = sorted(
+                    complexities, key=lambda x: x["complexity"], reverse=True
+                )[:200]
             if analysis_type in ("security", "all"):
                 issues = []
-                patterns = ["eval(", "exec(", "os.system(", "subprocess.run(", "pickle.load("]
+                patterns = [
+                    "eval(",
+                    "exec(",
+                    "os.system(",
+                    "subprocess.run(",
+                    "pickle.load(",
+                ]
                 for p in files:
                     try:
                         text = p.read_text()
@@ -1126,7 +1328,9 @@ class MCPServer:
                         continue
                     for pat in patterns:
                         if pat in text:
-                            issues.append({"file": str(p), "pattern": pat, "context": text[:200]})
+                            issues.append(
+                                {"file": str(p), "pattern": pat, "context": text[:200]}
+                            )
                 report["security_issues"] = issues[:200]
             if analysis_type in ("todos", "all"):
                 todos = []
@@ -1137,7 +1341,9 @@ class MCPServer:
                         continue
                     for i, line in enumerate(text.splitlines()):
                         if "TODO" in line or "FIXME" in line:
-                            todos.append({"file": str(p), "line": i+1, "content": line.strip()})
+                            todos.append(
+                                {"file": str(p), "line": i + 1, "content": line.strip()}
+                            )
                 report["todos"] = todos[:500]
             return ToolResult(status=ToolStatus.SUCCESS, data=report)
         except Exception as e:
@@ -1158,22 +1364,55 @@ class MCPServer:
                 explanation = "This error usually means you're trying to iterate over a None value."
                 root = "Variable is None where iterable expected"
                 if suggest:
-                    suggestions.append({"description": "Add a None check or default to empty list", "code": "if var is not None:\n    for x in var:\n        ...", "confidence": 0.95})
-                    suggestions.append({"description": "Initialize with empty list when None", "code": "var = var or []", "confidence": 0.85})
+                    suggestions.append(
+                        {
+                            "description": "Add a None check or default to empty list",
+                            "code": "if var is not None:\n    for x in var:\n        ...",
+                            "confidence": 0.95,
+                        }
+                    )
+                    suggestions.append(
+                        {
+                            "description": "Initialize with empty list when None",
+                            "code": "var = var or []",
+                            "confidence": 0.85,
+                        }
+                    )
             elif "NameError" in error:
                 explanation = "NameError indicates a variable is referenced before assignment or not defined in scope."
                 root = "Undefined variable"
                 if suggest:
-                    suggestions.append({"description": "Define the variable or import the module", "code": "my_var = 0", "confidence": 0.9})
+                    suggestions.append(
+                        {
+                            "description": "Define the variable or import the module",
+                            "code": "my_var = 0",
+                            "confidence": 0.9,
+                        }
+                    )
             elif "SyntaxError" in error:
                 explanation = "SyntaxError indicates invalid syntax in your code. Check the stack trace for exact location."
                 root = "Invalid syntax"
                 if suggest:
-                    suggestions.append({"description": "Fix syntax as indicated by parser", "code": "# Inspect the line and correct syntax", "confidence": 0.9})
+                    suggestions.append(
+                        {
+                            "description": "Fix syntax as indicated by parser",
+                            "code": "# Inspect the line and correct syntax",
+                            "confidence": 0.9,
+                        }
+                    )
             else:
                 explanation = "No specific heuristic matched. Provide relevant stack trace and surrounding code for deeper analysis."
                 root = "Unknown"
-            return ToolResult(status=ToolStatus.SUCCESS, data={"explanation": explanation, "root_cause": root, "suggested_fixes": suggestions, "stack": stack, "code": code})
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={
+                    "explanation": explanation,
+                    "root_cause": root,
+                    "suggested_fixes": suggestions,
+                    "stack": stack,
+                    "code": code,
+                },
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1202,17 +1441,22 @@ class MCPServer:
                             start = max(0, i - context_lines)
                             end = min(len(lines), i + context_lines + 1)
                             context = lines[start:end]
-                            matches.append({
-                                "file": str(p),
-                                "line": i + 1,
-                                "content": line.strip(),
-                                "context": context
-                            })
+                            matches.append(
+                                {
+                                    "file": str(p),
+                                    "line": i + 1,
+                                    "content": line.strip(),
+                                    "context": context,
+                                }
+                            )
                             if len(matches) >= limit:
                                 break
                     if len(matches) >= limit:
                         break
-            return ToolResult(status=ToolStatus.SUCCESS, data={"matches": matches, "files_searched": files_searched})
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"matches": matches, "files_searched": files_searched},
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1234,15 +1478,32 @@ class MCPServer:
                 new_content = original.replace(search, replace)
                 count = original.count(search)
             # Generate diff preview
-            diff = ''.join(difflib.unified_diff(original.splitlines(keepends=True), new_content.splitlines(keepends=True), fromfile=str(filepath), tofile=str(filepath)))
+            diff = "".join(
+                difflib.unified_diff(
+                    original.splitlines(keepends=True),
+                    new_content.splitlines(keepends=True),
+                    fromfile=str(filepath),
+                    tofile=str(filepath),
+                )
+            )
             if preview and not do_apply:
-                return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "preview": diff})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS, data={"matches": count, "preview": diff}
+                )
             if do_apply:
-                backup = filepath.with_suffix(filepath.suffix + f".backup.{int(datetime.now().timestamp())}")
+                backup = filepath.with_suffix(
+                    filepath.suffix + f".backup.{int(datetime.now().timestamp())}"
+                )
                 filepath.rename(backup)
                 filepath.write_text(new_content)
-                return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "diff": diff}, metadata={"backup": str(backup)})
-            return ToolResult(status=ToolStatus.ERROR, error="No action taken: set preview or apply")
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"matches": count, "diff": diff},
+                    metadata={"backup": str(backup)},
+                )
+            return ToolResult(
+                status=ToolStatus.ERROR, error="No action taken: set preview or apply"
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1256,7 +1517,9 @@ class MCPServer:
             install_deps = bool(args.get("install_deps", False))
             project_dir = Path.cwd() / name
             if project_dir.exists():
-                return ToolResult(status=ToolStatus.ERROR, error="Project directory already exists")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="Project directory already exists"
+                )
             project_dir.mkdir(parents=True)
             # Basic python-api scaffold
             if template == "python-api":
@@ -1265,10 +1528,16 @@ class MCPServer:
                 app_py.write_text(
                     "from fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n"
                 )
-                (project_dir / "requirements.txt").write_text("fastapi\nuvicorn[standard]\n")
-                (project_dir / "README.md").write_text(f"# {name}\n\nGenerated by Omarchy\n")
+                (project_dir / "requirements.txt").write_text(
+                    "fastapi\nuvicorn[standard]\n"
+                )
+                (project_dir / "README.md").write_text(
+                    f"# {name}\n\nGenerated by Singularity (Omarchy compatible)\n"
+                )
             else:
-                (project_dir / "README.md").write_text(f"# {name}\n\nGenerated by Omarchy (template: {template})\n")
+                (project_dir / "README.md").write_text(
+                    f"# {name}\n\nGenerated by Singularity (Omarchy compatible) (template: {template})\n"
+                )
             warnings = []
             if create_venv:
                 venv_dir = project_dir / ".venv"
@@ -1277,21 +1546,34 @@ class MCPServer:
                 if install_deps:
                     pip_bin = venv_dir / "bin" / "pip"
                     if pip_bin.exists():
-                        subprocess.run([str(pip_bin), "install", "-r", str(project_dir / "requirements.txt")])
+                        subprocess.run(
+                            [
+                                str(pip_bin),
+                                "install",
+                                "-r",
+                                str(project_dir / "requirements.txt"),
+                            ]
+                        )
             if git_init:
                 subprocess.run(["git", "init", str(project_dir)])
-            return ToolResult(status=ToolStatus.SUCCESS, data={"project": str(project_dir)}, warnings=warnings)
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"project": str(project_dir)},
+                warnings=warnings,
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
     async def save_session(self, args: Dict) -> ToolResult:
-        """Save current session to ~/.omarchy/sessions/<name>.json"""
+        """Save current session to ~/.singularity/sessions/<name>.json"""
         try:
             name = args.get("name")
             description = args.get("description", "")
             if not name:
-                return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="No session name provided"
+                )
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             sessions_dir.mkdir(parents=True, exist_ok=True)
             session_file = sessions_dir / f"{name}.json"
             # Gather session data
@@ -1308,10 +1590,12 @@ class MCPServer:
                 "created": datetime.now().isoformat(),
                 "conversation_history": getattr(self, "conversation_history", []),
                 "current_plan": getattr(self, "current_plan", None),
-                "context": context
+                "context": context,
             }
             session_file.write_text(json.dumps(session, indent=2))
-            return ToolResult(status=ToolStatus.SUCCESS, data={"session": str(session_file)})
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data={"session": str(session_file)}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1320,8 +1604,10 @@ class MCPServer:
         try:
             name = args.get("name")
             if not name:
-                return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="No session name provided"
+                )
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             session_file = sessions_dir / f"{name}.json"
             if not session_file.exists():
                 return ToolResult(status=ToolStatus.ERROR, error="Session not found")
@@ -1331,7 +1617,10 @@ class MCPServer:
             # Restore context
             ctx_file = self.context_dir / "context.json"
             ctx_file.write_text(json.dumps(session.get("context", []), indent=2))
-            return ToolResult(status=ToolStatus.SUCCESS, data={"loaded": True, "session": str(session_file)})
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"loaded": True, "session": str(session_file)},
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1343,7 +1632,9 @@ class MCPServer:
                 return ToolResult(status=ToolStatus.ERROR, error="No filepath provided")
             path = Path(filepath)
             if not path.exists() or path.suffix != ".py":
-                return ToolResult(status=ToolStatus.ERROR, error="File not found or not a Python file")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="File not found or not a Python file"
+                )
             module_name = path.stem
             tests_dir = path.parent / "tests"
             tests_dir.mkdir(exist_ok=True)
@@ -1352,17 +1643,23 @@ class MCPServer:
             try:
                 tree = ast.parse(source)
             except Exception as e:
-                return ToolResult(status=ToolStatus.ERROR, error=f"AST parse failed: {e}")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error=f"AST parse failed: {e}"
+                )
             funcs = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
             if not funcs:
-                return ToolResult(status=ToolStatus.ERROR, error="No functions found to test")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="No functions found to test"
+                )
             header = f"# Auto-generated tests for {module_name}\nimport pytest\nfrom {module_name} import *\n\n"
             body = ""
             for f in funcs[:10]:
                 test_name = f"test_{f.name}_basic"
                 body += f"def {test_name}():\n    # TODO: expand assertions for {f.name}\n    assert True\n\n"
             test_file.write_text(header + body)
-            return ToolResult(status=ToolStatus.SUCCESS, data={"tests_created": str(test_file)})
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data={"tests_created": str(test_file)}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1384,11 +1681,20 @@ class MCPServer:
                 if isinstance(items, str):
                     items = [items]
                 for it in items:
-                    entry = {"id": hashlib.md5((it + str(datetime.now().timestamp())).encode()).hexdigest()[:8], "content": it, "created": datetime.now().isoformat()}
+                    entry = {
+                        "id": hashlib.md5(
+                            (it + str(datetime.now().timestamp())).encode()
+                        ).hexdigest()[:8],
+                        "content": it,
+                        "created": datetime.now().isoformat(),
+                    }
                     context.append(entry)
                     added.append(entry)
                 ctx_file.write_text(json.dumps(context, indent=2))
-                return ToolResult(status=ToolStatus.SUCCESS, data={"added": added, "total": len(context)})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"added": added, "total": len(context)},
+                )
             if action == "remove":
                 removed = []
                 needle = items if isinstance(items, str) else None
@@ -1399,16 +1705,24 @@ class MCPServer:
                     else:
                         new_ctx.append(e)
                 ctx_file.write_text(json.dumps(new_ctx, indent=2))
-                return ToolResult(status=ToolStatus.SUCCESS, data={"removed": removed, "total": len(new_ctx)})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"removed": removed, "total": len(new_ctx)},
+                )
             if action == "list":
-                return ToolResult(status=ToolStatus.SUCCESS, data={"items": context, "count": len(context)})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"items": context, "count": len(context)},
+                )
             if action == "clear":
                 if ctx_file.exists():
                     ctx_file.unlink()
                 return ToolResult(status=ToolStatus.SUCCESS, data={"cleared": True})
             if action == "summarize":
                 combined = "\n".join([e["content"] for e in context])
-                summary = (combined[:1000] + "...") if len(combined) > 1000 else combined
+                summary = (
+                    (combined[:1000] + "...") if len(combined) > 1000 else combined
+                )
                 return ToolResult(status=ToolStatus.SUCCESS, data={"summary": summary})
             return ToolResult(status=ToolStatus.ERROR, error="Unknown action")
         except Exception as e:
@@ -1431,7 +1745,7 @@ class MCPServer:
                 "returncode": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "success": result.returncode == 0
+                "success": result.returncode == 0,
             }
             status = ToolStatus.SUCCESS if result.returncode == 0 else ToolStatus.ERROR
             return ToolResult(status=status, data=data)
@@ -1452,18 +1766,41 @@ class MCPServer:
                 apply_change = bool(args.get("apply", False))
                 content = filepath.read_text()
                 if old not in content:
-                    return ToolResult(status=ToolStatus.ERROR, error="String to rename not found")
+                    return ToolResult(
+                        status=ToolStatus.ERROR, error="String to rename not found"
+                    )
                 count = content.count(old)
-                diff = ''.join(difflib.unified_diff(content.splitlines(keepends=True), content.replace(old, new).splitlines(keepends=True), fromfile=str(filepath), tofile=str(filepath)))
+                diff = "".join(
+                    difflib.unified_diff(
+                        content.splitlines(keepends=True),
+                        content.replace(old, new).splitlines(keepends=True),
+                        fromfile=str(filepath),
+                        tofile=str(filepath),
+                    )
+                )
                 if preview and not apply_change:
-                    return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "preview": diff})
+                    return ToolResult(
+                        status=ToolStatus.SUCCESS,
+                        data={"matches": count, "preview": diff},
+                    )
                 if apply_change:
-                    backup = filepath.with_suffix(filepath.suffix + f".backup.{int(datetime.now().timestamp())}")
+                    backup = filepath.with_suffix(
+                        filepath.suffix + f".backup.{int(datetime.now().timestamp())}"
+                    )
                     filepath.rename(backup)
                     filepath.write_text(content.replace(old, new))
-                    return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "diff": diff}, metadata={"backup": str(backup)})
-                return ToolResult(status=ToolStatus.ERROR, error="No action taken: set preview or apply")
-            return ToolResult(status=ToolStatus.ERROR, error="Unsupported refactor type")
+                    return ToolResult(
+                        status=ToolStatus.SUCCESS,
+                        data={"matches": count, "diff": diff},
+                        metadata={"backup": str(backup)},
+                    )
+                return ToolResult(
+                    status=ToolStatus.ERROR,
+                    error="No action taken: set preview or apply",
+                )
+            return ToolResult(
+                status=ToolStatus.ERROR, error="Unsupported refactor type"
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1471,54 +1808,60 @@ class MCPServer:
 async def _fetch_url_impl(self, args: Dict) -> ToolResult:
     """Fetch text content from a URL (documentation reader)."""
     try:
-        url = args.get('url')
+        url = args.get("url")
         if not url:
-            return ToolResult(status=ToolStatus.ERROR, error='No URL provided')
-        timeout = float(args.get('timeout', 5.0))
-        maxlen = int(args.get('maxlen', 8000))
-        req = urllib.request.Request(url, headers={"User-Agent": "Omarchy/1.0"})
+            return ToolResult(status=ToolStatus.ERROR, error="No URL provided")
+        timeout = float(args.get("timeout", 5.0))
+        maxlen = int(args.get("maxlen", 8000))
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "Singularity/1.0 (Omarchy compatible)"}
+        )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode('utf-8', errors='replace')
+            raw = resp.read().decode("utf-8", errors="replace")
         # Strip tags and collapse whitespace
-        text = re.sub(r'<[^<]+?>', '', raw)
-        text = ' '.join(text.split())
-        return ToolResult(status=ToolStatus.SUCCESS, data={"text": text[:maxlen], "url": url})
+        text = re.sub(r"<[^<]+?>", "", raw)
+        text = " ".join(text.split())
+        return ToolResult(
+            status=ToolStatus.SUCCESS, data={"text": text[:maxlen], "url": url}
+        )
     except Exception as e:
         return ToolResult(status=ToolStatus.ERROR, error=str(e))
+
 
 # Attach the implementation to the class for use by instances
 MCPServer.fetch_url = _fetch_url_impl
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Run a minimal HTTP server exposing the MCP tools
     import argparse
     import logging
-    import traceback
     import sys
+    import traceback
+
     from aiohttp import web
 
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger("mcp_server")
 
-    parser = argparse.ArgumentParser(description='Run MCP server for Omarchy')
-    parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--port', type=int, default=0)
+    parser = argparse.ArgumentParser(
+        description="Run MCP server for Singularity (Omarchy compatible)"
+    )
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=0)
     args = parser.parse_args()
 
     # Immediate diagnostics to ensure __main__ executes when launched as subprocess
 
-
-
-    print('MCP runner: __main__ entered', flush=True)
+    print("MCP runner: __main__ entered", flush=True)
     try:
-        print('MCP runner: sys.executable=' + sys.executable, flush=True)
+        print("MCP runner: sys.executable=" + sys.executable, flush=True)
     except Exception:
         pass
 
     mcp = MCPServer()
     app = web.Application()
-    app.router.add_post('/call', mcp.http_handler)
-    app.router.add_get('/health', mcp.health)
+    app.router.add_post("/call", mcp.http_handler)
+    app.router.add_get("/health", mcp.health)
 
     runner = web.AppRunner(app)
 
@@ -1547,7 +1890,11 @@ if __name__ == '__main__':
             # Keep running until cancelled
             await asyncio.Event().wait()
         except Exception:
-            print('MCP server failed to start; see stderr for traceback', file=sys.stderr, flush=True)
+            print(
+                "MCP server failed to start; see stderr for traceback",
+                file=sys.stderr,
+                flush=True,
+            )
             traceback.print_exc()
             raise
         finally:
@@ -1559,9 +1906,9 @@ if __name__ == '__main__':
     try:
         asyncio.run(start())
     except KeyboardInterrupt:
-        print('MCP server shutting down', flush=True)
+        print("MCP server shutting down", flush=True)
     except Exception as e:
-        print(f'MCP server exited with error: {e}', file=sys.stderr, flush=True)
+        print(f"MCP server exited with error: {e}", file=sys.stderr, flush=True)
         sys.exit(1)
 
     async def analyze_codebase(self, args: Dict) -> ToolResult:
@@ -1574,12 +1921,21 @@ if __name__ == '__main__':
             files = []
             for p in path.rglob("*") if recursive else path.iterdir():
                 if p.is_file():
-                    if not include_tests and ("test" in p.name.lower() or "/tests/" in str(p)):
+                    if not include_tests and (
+                        "test" in p.name.lower() or "/tests/" in str(p)
+                    ):
                         continue
                     files.append(p)
             report = {"files": len(files)}
             if analysis_type in ("structure", "all"):
-                report["structure"] = [{"path": str(p), "size": p.stat().st_size, "lines": len(p.read_text().splitlines())} for p in files[:200]]
+                report["structure"] = [
+                    {
+                        "path": str(p),
+                        "size": p.stat().st_size,
+                        "lines": len(p.read_text().splitlines()),
+                    }
+                    for p in files[:200]
+                ]
             if analysis_type in ("dependencies", "all"):
                 imports = {}
                 for p in [f for f in files if f.suffix == ".py"]:
@@ -1596,26 +1952,59 @@ if __name__ == '__main__':
                                 imports[module] += 1
                     except Exception:
                         continue
-                report["dependencies"] = sorted(imports.items(), key=lambda x: x[1], reverse=True)[:200]
+                report["dependencies"] = sorted(
+                    imports.items(), key=lambda x: x[1], reverse=True
+                )[:200]
             if analysis_type in ("complexity", "all"):
+
                 def complexity_of_node(node):
                     score = 1
                     for child in ast.walk(node):
-                        if isinstance(child, (ast.If, ast.For, ast.While, ast.And, ast.Or, ast.Try, ast.With)):
+                        if isinstance(
+                            child,
+                            (
+                                ast.If,
+                                ast.For,
+                                ast.While,
+                                ast.And,
+                                ast.Or,
+                                ast.Try,
+                                ast.With,
+                            ),
+                        ):
                             score += 1
                     return score
+
                 complexities = []
                 for p in [f for f in files if f.suffix == ".py"]:
                     try:
                         tree = ast.parse(p.read_text())
-                        for func in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
-                            complexities.append({"file": str(p), "function": func.name, "complexity": complexity_of_node(func)})
+                        for func in [
+                            n
+                            for n in ast.walk(tree)
+                            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        ]:
+                            complexities.append(
+                                {
+                                    "file": str(p),
+                                    "function": func.name,
+                                    "complexity": complexity_of_node(func),
+                                }
+                            )
                     except Exception:
                         continue
-                report["complexity"] = sorted(complexities, key=lambda x: x["complexity"], reverse=True)[:200]
+                report["complexity"] = sorted(
+                    complexities, key=lambda x: x["complexity"], reverse=True
+                )[:200]
             if analysis_type in ("security", "all"):
                 issues = []
-                patterns = ["eval(", "exec(", "os.system(", "subprocess.run(", "pickle.load("]
+                patterns = [
+                    "eval(",
+                    "exec(",
+                    "os.system(",
+                    "subprocess.run(",
+                    "pickle.load(",
+                ]
                 for p in files:
                     try:
                         text = p.read_text()
@@ -1623,7 +2012,9 @@ if __name__ == '__main__':
                         continue
                     for pat in patterns:
                         if pat in text:
-                            issues.append({"file": str(p), "pattern": pat, "context": text[:200]})
+                            issues.append(
+                                {"file": str(p), "pattern": pat, "context": text[:200]}
+                            )
                 report["security_issues"] = issues[:200]
             if analysis_type in ("todos", "all"):
                 todos = []
@@ -1634,14 +2025,13 @@ if __name__ == '__main__':
                         continue
                     for i, line in enumerate(text.splitlines()):
                         if "TODO" in line or "FIXME" in line:
-                            todos.append({"file": str(p), "line": i+1, "content": line.strip()})
+                            todos.append(
+                                {"file": str(p), "line": i + 1, "content": line.strip()}
+                            )
                 report["todos"] = todos[:500]
             return ToolResult(status=ToolStatus.SUCCESS, data=report)
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
-
-    
-
 
     async def search_files(self, args: Dict) -> ToolResult:
         """Search files under a path for a query string and return matches with context"""
@@ -1668,17 +2058,22 @@ if __name__ == '__main__':
                             start = max(0, i - context_lines)
                             end = min(len(lines), i + context_lines + 1)
                             context = lines[start:end]
-                            matches.append({
-                                "file": str(p),
-                                "line": i + 1,
-                                "content": line.strip(),
-                                "context": context
-                            })
+                            matches.append(
+                                {
+                                    "file": str(p),
+                                    "line": i + 1,
+                                    "content": line.strip(),
+                                    "context": context,
+                                }
+                            )
                             if len(matches) >= limit:
                                 break
                     if len(matches) >= limit:
                         break
-            return ToolResult(status=ToolStatus.SUCCESS, data={"matches": matches, "files_searched": files_searched})
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"matches": matches, "files_searched": files_searched},
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1700,15 +2095,32 @@ if __name__ == '__main__':
                 new_content = original.replace(search, replace)
                 count = original.count(search)
             # Generate diff preview
-            diff = ''.join(difflib.unified_diff(original.splitlines(keepends=True), new_content.splitlines(keepends=True), fromfile=str(filepath), tofile=str(filepath)))
+            diff = "".join(
+                difflib.unified_diff(
+                    original.splitlines(keepends=True),
+                    new_content.splitlines(keepends=True),
+                    fromfile=str(filepath),
+                    tofile=str(filepath),
+                )
+            )
             if preview and not do_apply:
-                return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "preview": diff})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS, data={"matches": count, "preview": diff}
+                )
             if do_apply:
-                backup = filepath.with_suffix(filepath.suffix + f".backup.{int(datetime.now().timestamp())}")
+                backup = filepath.with_suffix(
+                    filepath.suffix + f".backup.{int(datetime.now().timestamp())}"
+                )
                 filepath.rename(backup)
                 filepath.write_text(new_content)
-                return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "diff": diff}, metadata={"backup": str(backup)})
-            return ToolResult(status=ToolStatus.ERROR, error="No action taken: set preview or apply")
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"matches": count, "diff": diff},
+                    metadata={"backup": str(backup)},
+                )
+            return ToolResult(
+                status=ToolStatus.ERROR, error="No action taken: set preview or apply"
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1722,7 +2134,9 @@ if __name__ == '__main__':
             install_deps = bool(args.get("install_deps", False))
             project_dir = Path.cwd() / name
             if project_dir.exists():
-                return ToolResult(status=ToolStatus.ERROR, error="Project directory already exists")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="Project directory already exists"
+                )
             project_dir.mkdir(parents=True)
             # Basic python-api scaffold
             if template == "python-api":
@@ -1731,10 +2145,16 @@ if __name__ == '__main__':
                 app_py.write_text(
                     "from fastapi import FastAPI\napp = FastAPI()\n\n@app.get('/')\ndef root():\n    return {'status': 'ok'}\n"
                 )
-                (project_dir / "requirements.txt").write_text("fastapi\nuvicorn[standard]\n")
-                (project_dir / "README.md").write_text(f"# {name}\n\nGenerated by Omarchy\n")
+                (project_dir / "requirements.txt").write_text(
+                    "fastapi\nuvicorn[standard]\n"
+                )
+                (project_dir / "README.md").write_text(
+                    f"# {name}\n\nGenerated by Singularity (Omarchy compatible)\n"
+                )
             else:
-                (project_dir / "README.md").write_text(f"# {name}\n\nGenerated by Omarchy (template: {template})\n")
+                (project_dir / "README.md").write_text(
+                    f"# {name}\n\nGenerated by Singularity (Omarchy compatible) (template: {template})\n"
+                )
             warnings = []
             if create_venv:
                 venv_dir = project_dir / ".venv"
@@ -1743,21 +2163,34 @@ if __name__ == '__main__':
                 if install_deps:
                     pip_bin = venv_dir / "bin" / "pip"
                     if pip_bin.exists():
-                        subprocess.run([str(pip_bin), "install", "-r", str(project_dir / "requirements.txt")])
+                        subprocess.run(
+                            [
+                                str(pip_bin),
+                                "install",
+                                "-r",
+                                str(project_dir / "requirements.txt"),
+                            ]
+                        )
             if git_init:
                 subprocess.run(["git", "init", str(project_dir)])
-            return ToolResult(status=ToolStatus.SUCCESS, data={"project": str(project_dir)}, warnings=warnings)
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"project": str(project_dir)},
+                warnings=warnings,
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
     async def save_session(self, args: Dict) -> ToolResult:
-        """Save current session to ~/.omarchy/sessions/<name>.json"""
+        """Save current session to ~/.singularity/sessions/<name>.json"""
         try:
             name = args.get("name")
             description = args.get("description", "")
             if not name:
-                return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="No session name provided"
+                )
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             sessions_dir.mkdir(parents=True, exist_ok=True)
             session_file = sessions_dir / f"{name}.json"
             # Gather session data
@@ -1774,10 +2207,12 @@ if __name__ == '__main__':
                 "created": datetime.now().isoformat(),
                 "conversation_history": getattr(self, "conversation_history", []),
                 "current_plan": getattr(self, "current_plan", None),
-                "context": context
+                "context": context,
             }
             session_file.write_text(json.dumps(session, indent=2))
-            return ToolResult(status=ToolStatus.SUCCESS, data={"session": str(session_file)})
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data={"session": str(session_file)}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1786,8 +2221,10 @@ if __name__ == '__main__':
         try:
             name = args.get("name")
             if not name:
-                return ToolResult(status=ToolStatus.ERROR, error="No session name provided")
-            sessions_dir = Path.home() / ".omarchy" / "sessions"
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="No session name provided"
+                )
+            sessions_dir = Path.home() / ".singularity" / "sessions"
             session_file = sessions_dir / f"{name}.json"
             if not session_file.exists():
                 return ToolResult(status=ToolStatus.ERROR, error="Session not found")
@@ -1797,9 +2234,13 @@ if __name__ == '__main__':
             # Restore context
             ctx_file = self.context_dir / "context.json"
             ctx_file.write_text(json.dumps(session.get("context", []), indent=2))
-            return ToolResult(status=ToolStatus.SUCCESS, data={"loaded": True, "session": str(session_file)})
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={"loaded": True, "session": str(session_file)},
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
+
     async def generate_tests(self, args: Dict) -> ToolResult:
         """Generate simple pytest tests for a Python file by inspecting function defs"""
         try:
@@ -1808,7 +2249,9 @@ if __name__ == '__main__':
                 return ToolResult(status=ToolStatus.ERROR, error="No filepath provided")
             path = Path(filepath)
             if not path.exists() or path.suffix != ".py":
-                return ToolResult(status=ToolStatus.ERROR, error="File not found or not a Python file")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="File not found or not a Python file"
+                )
             module_name = path.stem
             tests_dir = path.parent / "tests"
             tests_dir.mkdir(exist_ok=True)
@@ -1817,17 +2260,23 @@ if __name__ == '__main__':
             try:
                 tree = ast.parse(source)
             except Exception as e:
-                return ToolResult(status=ToolStatus.ERROR, error=f"AST parse failed: {e}")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error=f"AST parse failed: {e}"
+                )
             funcs = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
             if not funcs:
-                return ToolResult(status=ToolStatus.ERROR, error="No functions found to test")
+                return ToolResult(
+                    status=ToolStatus.ERROR, error="No functions found to test"
+                )
             header = f"# Auto-generated tests for {module_name}\nimport pytest\nfrom {module_name} import *\n\n"
             body = ""
             for f in funcs[:10]:
                 test_name = f"test_{f.name}_basic"
                 body += f"def {test_name}():\n    # TODO: expand assertions for {f.name}\n    assert True\n\n"
             test_file.write_text(header + body)
-            return ToolResult(status=ToolStatus.SUCCESS, data={"tests_created": str(test_file)})
+            return ToolResult(
+                status=ToolStatus.SUCCESS, data={"tests_created": str(test_file)}
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))
 
@@ -1849,11 +2298,20 @@ if __name__ == '__main__':
                 if isinstance(items, str):
                     items = [items]
                 for it in items:
-                    entry = {"id": hashlib.md5((it + str(datetime.now().timestamp())).encode()).hexdigest()[:8], "content": it, "created": datetime.now().isoformat()}
+                    entry = {
+                        "id": hashlib.md5(
+                            (it + str(datetime.now().timestamp())).encode()
+                        ).hexdigest()[:8],
+                        "content": it,
+                        "created": datetime.now().isoformat(),
+                    }
                     context.append(entry)
                     added.append(entry)
                 ctx_file.write_text(json.dumps(context, indent=2))
-                return ToolResult(status=ToolStatus.SUCCESS, data={"added": added, "total": len(context)})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"added": added, "total": len(context)},
+                )
             if action == "remove":
                 removed = []
                 needle = items if isinstance(items, str) else None
@@ -1864,16 +2322,24 @@ if __name__ == '__main__':
                     else:
                         new_ctx.append(e)
                 ctx_file.write_text(json.dumps(new_ctx, indent=2))
-                return ToolResult(status=ToolStatus.SUCCESS, data={"removed": removed, "total": len(new_ctx)})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"removed": removed, "total": len(new_ctx)},
+                )
             if action == "list":
-                return ToolResult(status=ToolStatus.SUCCESS, data={"items": context, "count": len(context)})
+                return ToolResult(
+                    status=ToolStatus.SUCCESS,
+                    data={"items": context, "count": len(context)},
+                )
             if action == "clear":
                 if ctx_file.exists():
                     ctx_file.unlink()
                 return ToolResult(status=ToolStatus.SUCCESS, data={"cleared": True})
             if action == "summarize":
                 combined = "\n".join([e["content"] for e in context])
-                summary = (combined[:1000] + "...") if len(combined) > 1000 else combined
+                summary = (
+                    (combined[:1000] + "...") if len(combined) > 1000 else combined
+                )
                 return ToolResult(status=ToolStatus.SUCCESS, data={"summary": summary})
             return ToolResult(status=ToolStatus.ERROR, error="Unknown action")
         except Exception as e:
@@ -1896,7 +2362,7 @@ if __name__ == '__main__':
                 "returncode": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "success": result.returncode == 0
+                "success": result.returncode == 0,
             }
             status = ToolStatus.SUCCESS if result.returncode == 0 else ToolStatus.ERROR
             return ToolResult(status=status, data=data)
@@ -1917,17 +2383,40 @@ if __name__ == '__main__':
                 apply_change = bool(args.get("apply", False))
                 content = filepath.read_text()
                 if old not in content:
-                    return ToolResult(status=ToolStatus.ERROR, error="String to rename not found")
+                    return ToolResult(
+                        status=ToolStatus.ERROR, error="String to rename not found"
+                    )
                 count = content.count(old)
-                diff = ''.join(difflib.unified_diff(content.splitlines(keepends=True), content.replace(old, new).splitlines(keepends=True), fromfile=str(filepath), tofile=str(filepath)))
+                diff = "".join(
+                    difflib.unified_diff(
+                        content.splitlines(keepends=True),
+                        content.replace(old, new).splitlines(keepends=True),
+                        fromfile=str(filepath),
+                        tofile=str(filepath),
+                    )
+                )
                 if preview and not apply_change:
-                    return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "preview": diff})
+                    return ToolResult(
+                        status=ToolStatus.SUCCESS,
+                        data={"matches": count, "preview": diff},
+                    )
                 if apply_change:
-                    backup = filepath.with_suffix(filepath.suffix + f".backup.{int(datetime.now().timestamp())}")
+                    backup = filepath.with_suffix(
+                        filepath.suffix + f".backup.{int(datetime.now().timestamp())}"
+                    )
                     filepath.rename(backup)
                     filepath.write_text(content.replace(old, new))
-                    return ToolResult(status=ToolStatus.SUCCESS, data={"matches": count, "diff": diff}, metadata={"backup": str(backup)})
-                return ToolResult(status=ToolStatus.ERROR, error="No action taken: set preview or apply")
-            return ToolResult(status=ToolStatus.ERROR, error="Unsupported refactor type")
+                    return ToolResult(
+                        status=ToolStatus.SUCCESS,
+                        data={"matches": count, "diff": diff},
+                        metadata={"backup": str(backup)},
+                    )
+                return ToolResult(
+                    status=ToolStatus.ERROR,
+                    error="No action taken: set preview or apply",
+                )
+            return ToolResult(
+                status=ToolStatus.ERROR, error="Unsupported refactor type"
+            )
         except Exception as e:
             return ToolResult(status=ToolStatus.ERROR, error=str(e))

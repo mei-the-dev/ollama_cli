@@ -1,0 +1,41 @@
+{
+  "generated_at": "2025-12-23T03:10:03.964390Z",
+  "cards": [
+    {
+      "test": "tests/test_integration_live_strict.py::test_live_fragmented_json_streaming (call)",
+      "prompt": "Please send the JSON object to write a file at /tmp/pytest-of-mei/pytest-145/test_live_fragmented_json_stre0/frag_test.txt with content: \"fragmented content\". Split the JSON into many small fragments sent sequentially so that the stream yields partial JSON fragments in multiple steps.",
+      "answer": "```json\n{\n  \"function_name\": \"write_code\",\n  \"arguments\": {\n    \"filepath\": \"/tmp/pytest-of-mei/pytest-145/test_live_fragmented_json_stre0/frag_test.txt\",\n    \"content\": \"fragmented content\"\n  }\n}\n```",
+      "parsed_tool": null
+    },
+    {
+      "test": "tests/test_integration_live_strict.py::test_live_strict_write_code (call)",
+      "prompt": "Create a file at /tmp/pytest-of-mei/pytest-145/test_live_strict_write_code0/strict_live_test.txt with EXACT content: \"strict content verification\". Output exactly one JSON object and nothing else (no code fences, no explanation). The JSON must be of the form {\"tool\":\"write_code\", \"args\": {\"filepath\": <path>, \"content\": <content>}}",
+      "answer": "{\n  \"tool\": \"write_code\",\n  \"args\": {\n    \"filepath\": \"/tmp/pytest-of-mei/pytest-145/test_live_strict_write_code0/strict_live_test.txt\",\n    \"content\": \"strict content verification\"\n  }\n}",
+      "parsed_tool": null
+    },
+    {
+      "test": "tests/test_integration_live_model.py::test_live_model_emits_tool_and_mcp_exec (call)",
+      "prompt": "Please create a file at /tmp/pytest-of-mei/pytest-145/test_live_model_emits_tool_and0/live_test.txt with the exact content: \"hello from live model test\" and output only the JSON tool call like {\"tool\": \"write_code\", \"args\": { ... }}",
+      "answer": "{\n  \"tool\": \"write_file\",\n  \"args\": {\n    \"file_path\": \"/tmp/pytest-of-mei/pytest-145/test_live_model_emits_tool_and0/live_test.txt\",\n    \"content\": \"hello from live model test\"\n  }\n}",
+      "parsed_tool": null
+    },
+    {
+      "test": "tests/test_integration_live_strict.py::test_live_fragmented_json_streaming (call)",
+      "prompt": "Please send the JSON object to write a file at /tmp/pytest-of-mei/pytest-144/test_live_fragmented_json_stre0/frag_test.txt with content: \"fragmented content\". Split the JSON into many small fragments sent sequentially so that the stream yields partial JSON fragments in multiple steps.",
+      "answer": "```json\n{\n  \"function_name\": \"write_code\",\n  \"arguments\": {\n    \"filepath\": \"/tmp/pytest-of-mei/pytest-144/test_live_fragmented_json_stre0/frag_test.txt\",\n    \"content\": \"fragmented content\"\n  }\n}\n```",
+      "parsed_tool": null
+    },
+    {
+      "test": "tests/test_integration_live_strict.py::test_live_strict_write_code (call)",
+      "prompt": "Create a file at /tmp/pytest-of-mei/pytest-144/test_live_strict_write_code0/strict_live_test.txt with EXACT content: \"strict content verification\". Output exactly one JSON object and nothing else (no code fences, no explanation). The JSON must be of the form {\"tool\":\"write_code\", \"args\": {\"filepath\": <path>, \"content\": <content>}}",
+      "answer": "{\n  \"tool\": \"write_code\",\n  \"args\": {\n    \"filepath\": \"/tmp/pytest-of-mei/pytest-144/test_live_strict_write_code0/strict_live_test.txt\",\n    \"content\": \"strict content verification\"\n  }\n}",
+      "parsed_tool": null
+    },
+    {
+      "test": "tests/test_integration_live_model.py::test_live_model_emits_tool_and_mcp_exec (call)",
+      "prompt": "Please create a file at /tmp/pytest-of-mei/pytest-144/test_live_model_emits_tool_and0/live_test.txt with the exact content: \"hello from live model test\" and output only the JSON tool call like {\"tool\": \"write_code\", \"args\": { ... }}",
+      "answer": "```json\n{\n  \"tool\": \"write_file\",\n  \"args\": {\n    \"file_path\": \"/tmp/pytest-of-mei/pytest-144/test_live_model_emits_tool_and0/live_test.txt\",\n    \"content\": \"hello from live model test\"\n  }\n}\n```",
+      "parsed_tool": null
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "singularity-cli"
+version = "1.0.0"
+description = "Singularity — AI Code Agent CLI (rebrand of Omarchy)"
+readme = "README.md"
+authors = [ { name = "Maintainer" } ]
+license = "MIT"
+
+[tool.setuptools]
+py-modules = ["singularity_cli", "omarchy_cli"]
+
+[tool.setuptools.packages.find]
+exclude = ["ref*", "logs*", "generated*", "tests*", ".venv*"]
+
+[project.scripts]
+singularity = "singularity_cli:run"
+omarchy = "omarchy_cli:run"

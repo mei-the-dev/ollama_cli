@@ -1,0 +1,234 @@
+Here are the fixes for your CLI.
+
+To achieve autocomplete (dropdowns) and proper window launching, we need to upgrade the input handling to `prompt_toolkit` (since `rich` does not support interactive dropdowns) and make the dashboard launcher OS-aware.
+
+### Step 1: Install Dependencies
+
+You will need `prompt_toolkit` for the autocomplete functionality.
+
+```bash
+pip install prompt_toolkit
+
+```
+
+### Step 2: Implement Autocomplete (The `@` and `/` triggers)
+
+Add these imports and the `OmarchyCompleter` class to the top of your `omarchy_cli.py`, and modify the `interactive_mode` to use them.
+
+**1. Add Imports**
+Add this near your other imports:
+
+```python
+# ... existing imports ...
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import Completer, Completion
+    from prompt_toolkit.styles import Style
+except ImportError:
+    print("Installing prompt_toolkit...")
+    subprocess.run([sys.executable, "-m", "pip", "install", "prompt_toolkit"], check=True)
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import Completer, Completion
+    from prompt_toolkit.styles import Style
+
+```
+
+**2. Add the Completer Class**
+Insert this class before `OmarchyAgent`:
+
+```python
+class OmarchyCompleter(Completer):
+    def __init__(self, commands):
+        self.commands = commands
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        word = document.get_word_before_cursor(WORD=True)
+
+        # 1. Command Autocomplete (triggered by /)
+        if text.lstrip().startswith('/'):
+            # Only autocomplete if we are typing the command part (start of line)
+            if ' ' not in text.lstrip() or (text.lstrip().startswith('/') and ' ' not in text.lstrip()[:-len(word)]):
+                 for cmd, desc in self.commands:
+                    if cmd.startswith(word):
+                        yield Completion(cmd, start_position=-len(word), display=cmd, display_meta=desc)
+
+        # 2. File Autocomplete (triggered by @)
+        if word.startswith('@'):
+            search_term = word[1:] # content after @
+            try:
+                # List files in current directory
+                for fname in os.listdir('.'):
+                    if fname.startswith(search_term) and not fname.startswith('.'):
+                        if os.path.isdir(fname):
+                            fname += '/'
+                        yield Completion(
+                            f"@{fname}", 
+                            start_position=-len(word), 
+                            display=f"📄 {fname}", 
+                            display_meta="File Context"
+                        )
+            except OSError:
+                pass
+
+```
+
+**3. Update `interactive_mode**`
+Replace your existing `interactive_mode` method in `OmarchyCLI` with this version. It replaces `Prompt.ask` with `session.prompt`:
+
+```python
+    async def interactive_mode(self):
+        """Main interactive loop with Autocomplete"""
+        self.show_banner()
+        
+        current_mode = "chat"
+        
+        # Define commands for autocomplete
+        commands_list = [
+            ("/mode", "Switch mode"),
+            ("/new", "Start new conversation"),
+            ("/plan", "View current plan"),
+            ("/save", "Save session"),
+            ("/load", "Load session"),
+            ("/exec", "Execute shell command"),
+            ("/git", "Git operations"),
+            ("/dashboard", "Launch dashboard"),
+            ("/config", "Show config"),
+            ("/help", "Show help"),
+            ("/exit", "Exit")
+        ]
+
+        # Initialize PromptToolkit session
+        session = PromptSession(
+            completer=OmarchyCompleter(commands_list),
+            style=Style.from_dict({
+                'completion-menu.completion': 'bg:#008888 #white',
+                'completion-menu.completion.current': 'bg:#00aaaa #000000',
+                'scrollbar.background': 'bg:#88aaaa',
+                'scrollbar.button': 'bg:#222222',
+            })
+        )
+        
+        while True:
+            try:
+                # Use prompt_toolkit instead of rich.prompt for input
+                # We use HTML for coloring the prompt text
+                from prompt_toolkit.formatted_text import HTML
+                
+                prompt_text = f"\n<bold cyan>omarchy</bold cyan> [[{current_mode}]] > "
+                user_input = await session.prompt_async(HTML(prompt_text))
+                
+                if not user_input:
+                    continue
+                
+                # Handle commands
+                if user_input.startswith("/"):
+                    parts = user_input.split(maxsplit=1)
+                    cmd = parts[0]
+                    args = parts[1] if len(parts) > 1 else ""
+                    
+                    if cmd == "/exit":
+                        console.print("[yellow]Goodbye! Happy coding! 👋[/yellow]")
+                        break
+                    elif cmd == "/help":
+                        self.show_help()
+                    elif cmd == "/mode":
+                        # ... (Keep your existing command logic here) ...
+                        if args in self.modes:
+                            current_mode = args
+                            console.print(f"[green]Switched to {current_mode} mode[/green]")
+                        else:
+                            self.show_modes()
+                    # ... Copy the rest of your command handlers here ...
+                    elif cmd == "/dashboard":
+                         await self.start_dashboard()
+                    elif cmd == "/exec":
+                        await self.execute_command(args)
+                    else:
+                        # Fallback for unknown commands
+                        pass
+                        
+                    continue
+                
+                # Process based on mode
+                await self.process_prompt(user_input, current_mode)
+                
+            except KeyboardInterrupt:
+                continue # Just clear line on Ctrl+C
+            except EOFError:
+                break # Exit on Ctrl+D
+            except Exception as e:
+                console.print(f"[red]Error: {e}[/red]")
+
+```
+
+---
+
+### Step 3: Fix Dashboard Launching
+
+Your current code only supports `tmux`. If you are on Windows, macOS, or a Linux desktop without tmux, it silently runs in the background.
+
+Replace the `start_dashboard` method in `OmarchyCLI` with this OS-aware version:
+
+```python
+    async def start_dashboard(self):
+        """Start the dashboard UI in a new terminal window."""
+        import platform
+        
+        # Calculate paths
+        # Assuming dashboard is in 'ref/singularity_dashboard.py' relative to this script
+        dashboard_script = Path(__file__).parent / 'ref' / 'omarchy_dashboard.py'
+        if not dashboard_script.exists():
+            console.print(f"[red]Dashboard script not found at {dashboard_script}[/red]")
+            return
+
+        system = platform.system()
+        cmd = [sys.executable, str(dashboard_script)]
+        
+        console.print(f"[cyan]Attempting to launch dashboard on {system}...[/cyan]")
+
+        try:
+            if system == "Windows":
+                # Windows: Use 'start' command via shell
+                # /k keeps window open if script crashes
+                subprocess.Popen(f'start cmd /k "{sys.executable} {dashboard_script}"', shell=True)
+                
+            elif system == "Darwin": # macOS
+                # macOS: Use 'open -a Terminal'
+                subprocess.Popen(['open', '-a', 'Terminal', sys.executable, str(dashboard_script)])
+                
+            elif system == "Linux":
+                # Linux: Try common terminal emulators or fallback to tmux
+                terminals = [
+                    ['gnome-terminal', '--', sys.executable, str(dashboard_script)],
+                    ['xterm', '-e', sys.executable, str(dashboard_script)],
+                    ['konsole', '-e', sys.executable, str(dashboard_script)],
+                    # Fallback to tmux if installed
+                    ['tmux', 'new-window', '-n', 'dashboard', sys.executable, str(dashboard_script)]
+                ]
+                
+                launched = False
+                for term_cmd in terminals:
+                    if shutil.which(term_cmd[0]):
+                        subprocess.Popen(term_cmd)
+                        launched = True
+                        break
+                
+                if not launched:
+                    console.print("[yellow]No suitable terminal emulator found (gnome-terminal, xterm, konsole, or tmux).[/yellow]")
+                    console.print(f"[yellow]Please run this manually: python3 {dashboard_script}[/yellow]")
+                    
+            else:
+                console.print("[red]Unsupported OS for auto-launch. Please run manually.[/red]")
+
+        except Exception as e:
+            console.print(f"[red]Failed to launch dashboard: {e}[/red]")
+
+```
+
+### Summary of Changes
+
+1. **Dependencies:** Added logic to install/import `prompt_toolkit`.
+2. **Completer:** Added `OmarchyCompleter` to handle file scanning (`os.listdir`) when `@` is typed and command filtering when `/` is typed.
+3. **Input Loop:** Swapped `Prompt.ask` (Rich) for `session.prompt_async` (Prompt Toolkit) to enable the interactive dropdown UI.
+4. **Dashboard:** Rewrote `start_dashboard` to check `platform.system()` and use native commands (`start` for Windows, `open` for macOS, `gnome-terminal` etc. for Linux) instead of relying solely on `tmux`.

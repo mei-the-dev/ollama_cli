@@ -25,10 +25,10 @@ venv/
 # OS files
 .DS_Store
 
-# Ollama and Omarchy caches
-.omarchy/*.db
-.omarchy/cache/
-.omarchy/sessions/
+# Ollama and Singularity caches
+.singularity/*.db
+.singularity/cache/
+.singularity/sessions/ 
 
 # Local runtime logs
 logs/

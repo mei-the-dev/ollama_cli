@@ -1,0 +1,386 @@
+
+Perfect — Qwen2.5-Coder on Ollama is actually **well-suited** for multi-agent orchestration *if* you structure it correctly and keep agents narrow, deterministic, and tool-aware.
+
+Below is a **production-grade multi-agent design** that fits **MCP v1 + Marko**, works with **local Ollama**, and avoids the classic “agents hallucinating each other” trap.
+
+This is not fluffy “AutoGPT stuff” — this is how you make it **reliable**.
+
+---
+
+# Omarchy Multi-Agent Orchestration (Ollama + Qwen2.5-Coder)
+
+---
+
+## 1. Core Principle (Critical)
+
+> **Only ONE agent may call tools.**
+
+All others:
+
+* Think
+* Plan
+* Review
+* Critique
+
+This avoids:
+
+* Race conditions
+* Conflicting writes
+* Tool spam
+* Context explosions
+
+---
+
+## 2. Agent Roles (Minimal, Powerful Set)
+
+### 2.1 Orchestrator (Brain / Router)
+
+**No tools. Ever.**
+
+```json
+{
+  "id": "orchestrator",
+  "persona": "technical-director",
+  "tools": [],
+  "responsibilities": [
+    "Understand user intent",
+    "Select agents",
+    "Sequence phases",
+    "Approve final output"
+  ]
+}
+```
+
+---
+
+### 2.2 Planner Agent
+
+**No tools. Structured output only.**
+
+```json
+{
+  "id": "planner",
+  "persona": "senior-technical-pm",
+  "output_schema": "plan.marko.json"
+}
+```
+
+---
+
+### 2.3 Coder Agent (ONLY tool caller)
+
+This is your **current Omarchy agent**, slightly constrained.
+
+```json
+{
+  "id": "coder",
+  "persona": "senior-software-engineer",
+  "tools": "all",
+  "constraints": {
+    "tool_calls_require_plan": true,
+    "max_parallel_tools": 1
+  }
+}
+```
+
+---
+
+### 2.4 Reviewer Agent
+
+**Read-only, no tools**
+
+```json
+{
+  "id": "reviewer",
+  "persona": "principal-engineer",
+  "tools": ["read_code"]
+}
+```
+
+---
+
+### 2.5 Optional: Test / QA Agent
+
+Still **no writes**.
+
+```json
+{
+  "id": "qa",
+  "persona": "test-engineer",
+  "tools": ["execute_code"],
+  "constraints": {
+    "execution_only": true
+  }
+}
+```
+
+---
+
+## 3. Execution Pipeline (Deterministic)
+
+```
+User
+ ↓
+Orchestrator
+ ↓
+Planner
+ ↓
+Coder
+ ↓
+Reviewer
+ ↓
+(Conditional) Fix Loop
+ ↓
+Final Output
+```
+
+---
+
+## 4. Orchestrator Logic (Key)
+
+The orchestrator **does not reason deeply** — it routes.
+
+### Orchestrator Prompt (System)
+
+```
+You coordinate specialized agents.
+You never write code.
+You never call tools.
+You decide which agent runs next.
+You validate schemas.
+```
+
+### Orchestrator Output Contract
+
+```json
+{
+  "next_agent": "planner",
+  "context": {
+    "user_goal": "...",
+    "constraints": []
+  }
+}
+```
+
+---
+
+## 5. Planner Agent (Marko-Strict)
+
+### Planner Output (MANDATORY)
+
+```json
+{
+  "plan": {
+    "goal": "Implement X",
+    "steps": [
+      {
+        "id": "1",
+        "description": "Inspect codebase",
+        "agent": "coder",
+        "tools": ["read_code"]
+      },
+      {
+        "id": "2",
+        "description": "Implement feature",
+        "agent": "coder",
+        "tools": ["write_code"]
+      },
+      {
+        "id": "3",
+        "description": "Review changes",
+        "agent": "reviewer"
+      }
+    ]
+  }
+}
+```
+
+If this schema fails → **retry planner**.
+
+---
+
+## 6. Coder Agent (Tool-Bound)
+
+### Hard Constraints Injected into System Prompt
+
+```
+You may only call tools listed in the current plan step.
+You must include a justification referencing the step id.
+If unsure, ask the orchestrator.
+```
+
+### Tool Call Example
+
+```json
+{
+  "tool_call": {
+    "tool": "write_code",
+    "arguments": {...},
+    "justification": "Plan step 2"
+  }
+}
+```
+
+Your MCP server **rejects** tool calls without justification.
+
+---
+
+## 7. Reviewer Agent (Quality Gate)
+
+Reviewer sees:
+
+* Plan
+* Diff
+* Execution logs
+
+### Reviewer Output
+
+```json
+{
+  "review": {
+    "verdict": "approve | request_changes",
+    "issues": [
+      {
+        "severity": "high",
+        "description": "Missing error handling"
+      }
+    ]
+  }
+}
+```
+
+---
+
+## 8. Fix Loop (Single Retry Rule)
+
+If reviewer returns `request_changes`:
+
+```
+Orchestrator → Coder → Reviewer
+```
+
+Only **one loop** allowed.
+
+This prevents infinite self-debate.
+
+---
+
+## 9. Ollama Execution Strategy (IMPORTANT)
+
+### 9.1 Separate Context Windows per Agent
+
+Each agent gets:
+
+* Minimal system prompt
+* Only relevant artifacts
+
+Do **not** share full conversation history.
+
+---
+
+### 9.2 Same Model, Different Personas
+
+You reuse `qwen2.5-coder`, but persona changes behavior:
+
+```python
+def run_agent(role, system_prompt, input):
+    ollama.chat(
+      model="qwen2.5-coder",
+      system=system_prompt,
+      messages=[{"role":"user","content":input}]
+    )
+```
+
+This works surprisingly well.
+
+---
+
+## 10. Marko Multi-Agent Schema
+
+### `orchestration.marko.json`
+
+```json
+{
+  "orchestration": {
+    "strategy": "sequential",
+    "agents": ["orchestrator", "planner", "coder", "reviewer"],
+    "max_loops": 1
+  }
+}
+```
+
+---
+
+## 11. MCP Enforcement Points (Server-Side)
+
+Your MCP server should enforce:
+
+| Rule                             | Enforced |
+| -------------------------------- | -------- |
+| Tool only callable by coder      | ✅        |
+| Tool must reference plan step    | ✅        |
+| Dangerous tools require approval | ✅        |
+| No parallel tool calls           | ✅        |
+
+---
+
+## 12. CLI UX Upgrade (Simple, Powerful)
+
+CLI shows:
+
+```
+[Orchestrator] Selecting agents
+[Planner] Creating plan
+[Coder] Step 2/3: write_code
+[Reviewer] Issues found
+[Coder] Applying fix
+[Reviewer] Approved ✓
+```
+
+This makes Omarchy feel **professional**.
+
+---
+
+## 13. Why This Works with Qwen2.5-Coder
+
+Qwen2.5-Coder is:
+
+* Strong at structured JSON
+* Reliable with role-based prompts
+* Less prone to role leakage than GPT-4 class models
+
+This architecture **compensates for smaller model size** with structure.
+
+---
+
+## 14. What You Have Now (Reality Check)
+
+You now have:
+
+* A **local, deterministic, multi-agent coding system**
+* MCP-compliant tooling
+* Plan-first execution
+* Review-gated writes
+* CI-safe automation
+
+This is **Cursor-Agent class**, but open and local.
+
+---
+
+## 15. Next Concrete Steps (I Recommend)
+
+I can next:
+
+1. Generate **drop-in orchestration engine code**
+2. Add **agent runner abstractions** to Omarchy
+3. Create **Marko validators**
+4. Refactor MCP server to enforce agent identity
+5. Add **parallel read-only agents** safely
+
+If you want, say:
+
+> **“Generate the orchestration engine code”**
+> or
+> **“Refactor Omarchy CLI for multi-agent execution”**
+
+You’re building something very real here.

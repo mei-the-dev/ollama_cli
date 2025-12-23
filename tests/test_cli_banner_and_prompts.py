@@ -1,28 +1,30 @@
 import sys
 from pathlib import Path
+
+import json
 import pytest
 
-from omarchy_cli import OmarchyCLI
+from omarchy_cli import SingularityCLI
 
 
 def test_show_banner_runs(capsys):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     # show_banner should run without error and print something
     cli.show_banner()
     captured = capsys.readouterr()
-    assert "Omarchy" in captured.out or "Artistic Code Agent" in captured.out
+    assert "Singularity" in captured.out or "Artistic Code Agent" in captured.out
 
 
 @pytest.mark.asyncio
 async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
-    cli = OmarchyCLI()
+    cli = SingularityCLI()
     # Ensure non-interactive environment
-    monkeypatch.setattr(sys.stdin, 'isatty', lambda: False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
 
     # Remove any existing config
-    cfg_path = Path.home() / '.omarchy' / 'config.json'
+    cfg_path = Path.home() / ".singularity" / "config.json"
     if cfg_path.exists():
-        bak = tmp_path / 'cfg_backup.json'
+        bak = tmp_path / "cfg_backup.json"
         bak.write_text(cfg_path.read_text())
         cfg_path.unlink()
     try:
@@ -30,14 +32,25 @@ async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
         # In non-interactive mode, config file should not be created/modified by prompts
         assert not cfg_path.exists()
     finally:
-        if 'bak' in locals() and bak.exists():
+        if "bak" in locals() and bak.exists():
             cfg_path.parent.mkdir(parents=True, exist_ok=True)
             cfg_path.write_text(bak.read_text())
 
 
 @pytest.mark.asyncio
-async def test_execute_command_async(capsys):
-    cli = OmarchyCLI()
-    await cli.execute_command('echo hello-omarchy-test')
+async def test_execute_command_async(capsys, tmp_path, monkeypatch):
+    cli = SingularityCLI()
+
+    # Ensure events file is present to assert this command execution does not emit PARSED_TOOL
+    import os
+    events = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(events))
+
+    await cli.execute_command("echo hello-singularity-test")
     captured = capsys.readouterr()
-    assert 'hello-omarchy-test' in captured.out
+    assert "hello-singularity-test" in captured.out
+
+    # If events file exists, assert no PARSED_TOOL emitted by local command execution
+    if events.exists():
+        evs = [json.loads(l) for l in events.read_text(encoding='utf-8').splitlines() if l.strip()]
+        assert not any(e.get('event') == 'PARSED_TOOL' for e in evs)

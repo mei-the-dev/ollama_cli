@@ -1,0 +1,390 @@
+This is a completely new **Omarchy Command Center**. It integrates monitoring for **both** your AI Model (Ollama) and your Tools (MCP Server) into a single TUI application.
+
+It features:
+
+1. **Dual-System Monitoring**: Live health checks for Ollama (11434) and MCP Server (8080).
+2. **Tool Inspector**: Live fetching of available tools and their schemas from your running MCP server.
+3. **Inference Lab**: A chat interface to test the model with real-time token speed (TPS) graphs.
+4. **Resource Watch**: CPU/RAM usage specific to the `ollama` and `python` (server) processes.
+
+### `omarchy_dashboard.py`
+
+Save this file in your `~/.omarchy/` folder (or where your other files are).
+
+```python
+#!/usr/bin/env python3
+"""
+Omarchy Command Center
+A unified dashboard for monitoring Ollama and the Omarchy MCP Server.
+"""
+import asyncio
+import json
+import time
+import psutil
+import aiohttp
+from datetime import datetime
+from collections import deque
+
+from textual.app import App, ComposeResult
+from textual.containers import Container, Horizontal, Vertical, Grid, ScrollableContainer
+from textual.widgets import (
+    Header, Footer, Static, Button, Label, Log, Input, 
+    TabbedContent, TabPane, Sparkline, Digits, DataTable, Tree
+)
+from textual.reactive import reactive
+from textual.worker import Worker
+from textual import work
+
+# --- VISUAL STYLING ---
+CSS = """
+Screen {
+    background: #0f172a;
+    color: #e2e8f0;
+}
+
+/* -- LAYOUT -- */
+.kpi-grid {
+    layout: grid;
+    grid-size: 4 1;
+    grid-gutter: 1;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.main-content {
+    height: 1fr;
+    border: solid #334155;
+    background: #1e293b;
+}
+
+/* -- WIDGETS -- */
+.card {
+    background: #1e293b;
+    border: solid #334155;
+    height: 10;
+    padding: 1;
+}
+
+.status-ok { color: #4ade80; }
+.status-err { color: #f87171; }
+.status-wait { color: #facc15; }
+
+.section-title {
+    background: #334155;
+    color: #f8fafc;
+    padding: 0 1;
+    text-style: bold;
+}
+
+/* -- SPECIFIC -- */
+#chat-log {
+    height: 1fr;
+    background: #0f172a;
+    border: none;
+    padding: 1;
+}
+
+Sparkline {
+    height: 3;
+    width: 100%;
+    margin-top: 1;
+}
+Sparkline > .bar--1 { color: #38bdf8; }
+"""
+
+class ServiceStatus(Static):
+    """Component to show UP/DOWN status of a service."""
+    status = reactive("CHECKING")
+
+    def __init__(self, service_name, port, **kwargs):
+        super().__init__(**kwargs)
+        self.service_name = service_name
+        self.port = port
+
+    def compose(self) -> ComposeResult:
+        yield Label(f"{self.service_name}", classes="section-title")
+        yield Label(f"Port: {self.port}")
+        yield Label("UNKNOWN", id="status-lbl")
+
+    def watch_status(self, val):
+        lbl = self.query_one("#status-lbl")
+        if val == "ONLINE":
+            lbl.update("● ONLINE")
+            lbl.classes = "status-ok"
+        else:
+            lbl.update("○ OFFLINE")
+            lbl.classes = "status-err"
+
+class ResourceGraph(Static):
+    """Monitors CPU/RAM for specific process names."""
+    def __init__(self, title, process_name, color="blue", **kwargs):
+        super().__init__(**kwargs)
+        self.title = title
+        self.process_name = process_name
+        self.color = color
+
+    def compose(self) -> ComposeResult:
+        yield Label(self.title)
+        yield Sparkline(summary_function=max)
+        yield Label("0.0%", id="val-lbl")
+
+    def update_data(self, usage):
+        self.query_one(Sparkline).add_value(usage)
+        self.query_one("#val-lbl").update(f"{usage:.1f}%")
+
+class SingularityDashboard(App):
+    CSS = CSS
+    TITLE = "OMARCHY COMMAND CENTER"
+    SUB_TITLE = "v2.0 | Model & Tool Monitor"
+
+    # Reactives
+    ollama_online = reactive(False)
+    mcp_online = reactive(False)
+    
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        
+        with TabbedContent():
+            
+            # --- TAB 1: SYSTEM HEALTH ---
+            with TabPane("System Status", id="tab-status"):
+                with Grid(classes="kpi-grid"):
+                    yield ServiceStatus("Ollama API", 11434, id="stat-ollama", classes="card")
+                    yield ServiceStatus("MCP Server", 8080, id="stat-mcp", classes="card")
+                    yield ResourceGraph("Ollama CPU", "ollama", classes="card")
+                    yield ResourceGraph("MCP (Python) CPU", "python", classes="card")
+
+                with Container(classes="main-content"):
+                    yield Label("  Server Log Tail (MCP)", classes="section-title")
+                    yield Log(id="sys-log", highlight=True)
+
+            # --- TAB 2: INFERENCE LAB ---
+            with TabPane("Inference Lab", id="tab-chat"):
+                with Horizontal(style="height: 1fr"):
+                    with Vertical(style="width: 70%"):
+                        yield Log(id="chat-log", markup=True)
+                        yield Input(placeholder="Send prompt to Ollama...", id="chat-input")
+                    
+                    with Vertical(style="width: 30%; border-left: solid #334155; padding: 1;"):
+                        yield Label("Live Metrics", classes="section-title")
+                        yield Label("\nGeneration Speed")
+                        yield Digits("0.0", id="tps-digit")
+                        yield Label("tokens/sec")
+                        yield Sparkline(id="tps-graph")
+                        yield Label("\nLast Request")
+                        yield Label("Wait: 0ms", id="lat-wait")
+                        yield Label("Eval: 0ms", id="lat-eval")
+
+            # --- TAB 3: TOOL INSPECTOR ---
+            with TabPane("Tool Inspector", id="tab-tools"):
+                yield Button("Refresh Tools", id="btn-refresh-tools", variant="primary")
+                yield Container(id="tool-container", classes="main-content")
+
+        yield Footer()
+
+    def on_mount(self):
+        self.set_interval(2.0, self.monitor_services)
+        self.set_interval(1.0, self.monitor_resources)
+        self.log_msg("Dashboard initialized.")
+        self.check_tools()
+
+    def log_msg(self, msg):
+        """Write to the system log widget"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        self.query_one("#sys-log").write(f"[{timestamp}] {msg}")
+
+    # --- MONITORING LOOP ---
+    @work(exclusive=True)
+    async def monitor_services(self):
+        # Check Ollama
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://localhost:11434/api/tags", timeout=1) as r:
+                    is_up = r.status == 200
+                    self.query_one("#stat-ollama").status = "ONLINE" if is_up else "OFFLINE"
+                    if is_up and not self.ollama_online: self.log_msg("Ollama connected.")
+                    self.ollama_online = is_up
+        except:
+            self.query_one("#stat-ollama").status = "OFFLINE"
+            self.ollama_online = False
+
+        # Check MCP
+        try:
+            async with aiohttp.ClientSession() as session:
+                # We POST to tools/list to check health
+                payload = {"method": "tools/list", "params": {}}
+                async with session.post("http://localhost:8080/mcp", json=payload, timeout=1) as r:
+                    is_up = r.status == 200
+                    self.query_one("#stat-mcp").status = "ONLINE" if is_up else "OFFLINE"
+                    if is_up and not self.mcp_online: 
+                        self.log_msg("MCP Server connected.")
+                        self.check_tools() # Auto-refresh tools on reconnect
+                    self.mcp_online = is_up
+        except:
+            self.query_one("#stat-mcp").status = "OFFLINE"
+            self.mcp_online = False
+
+    def monitor_resources(self):
+        """Updates the sparklines for CPU usage"""
+        ollama_cpu = 0
+        python_cpu = 0
+        
+        for p in psutil.process_iter(['name', 'cpu_percent']):
+            try:
+                name = p.info['name'].lower()
+                if 'ollama' in name:
+                    ollama_cpu += p.info['cpu_percent']
+                elif 'python' in name and p.pid != os.getpid(): # Don't count dashboard itself
+                    python_cpu += p.info['cpu_percent']
+            except: pass
+
+        # Find the widgets by scanning children (since we didn't give them unique IDs)
+        graphs = self.query(ResourceGraph)
+        if len(graphs) >= 2:
+            graphs[0].update_data(ollama_cpu)
+            graphs[1].update_data(python_cpu)
+
+    # --- TOOL INSPECTOR ---
+    async def on_button_pressed(self, event):
+        if event.button.id == "btn-refresh-tools":
+            await self.check_tools()
+
+    @work
+    async def check_tools(self):
+        if not self.mcp_online:
+            return
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                payload = {"method": "tools/list", "params": {}}
+                async with session.post("http://localhost:8080/mcp", json=payload) as r:
+                    data = await r.json()
+                    tools = data.get("tools", [])
+                    
+                    cont = self.query_one("#tool-container")
+                    await cont.remove_children()
+                    
+                    # Build a nicely formatted tree/table for tools
+                    tree = Tree("Available Tools")
+                    tree.root.expand()
+                    
+                    for t in tools:
+                        node = tree.root.add(f"[bold cyan]{t['name']}[/bold cyan]")
+                        node.add(f"[italic]{t.get('description', 'No description')}[/italic]")
+                        
+                        # Show schema arguments
+                        props = t.get("inputSchema", {}).get("properties", {})
+                        if props:
+                            args_node = node.add("Arguments")
+                            for k, v in props.items():
+                                args_node.add(f"[yellow]{k}[/yellow]: {v.get('type')}")
+                    
+                    await cont.mount(tree)
+                    self.log_msg(f"Refreshed tool list: {len(tools)} tools found.")
+        except Exception as e:
+            self.log_msg(f"Failed to fetch tools: {e}")
+
+    # --- CHAT / INFERENCE ---
+    async def on_input_submitted(self, event):
+        val = event.value
+        if not val: return
+        event.input.value = ""
+        
+        log = self.query_one("#chat-log")
+        log.write(f"\n[bold green]You >[/bold green] {val}")
+        self.run_inference(val)
+
+    @work(exclusive=True)
+    async def run_inference(self, prompt):
+        log = self.query_one("#chat-log")
+        tps_widget = self.query_one("#tps-digit")
+        graph = self.query_one("#tps-graph")
+        
+        log.write("[bold purple]AI >[/bold purple] ", end="")
+        
+        start_time = time.time()
+        count = 0
+        
+        try:
+            # We assume qwen2.5-coder based on previous context, or grab first avail
+            model = "qwen2.5-coder:14b-instruct-q4_K_M" 
+            
+            async with aiohttp.ClientSession() as session:
+                payload = {"model": model, "prompt": prompt, "stream": True}
+                async with session.post("http://localhost:11434/api/generate", json=payload) as r:
+                    async for line in r.content:
+                        if not line: continue
+                        data = json.loads(line)
+                        
+                        if "response" in data:
+                            chunk = data["response"]
+                            log.write(chunk)
+                            count += 1
+                            
+                            # Live Speed Update
+                            now = time.time()
+                            diff = now - start_time
+                            if diff > 0.5: # Update every 500ms
+                                tps = count / diff
+                                tps_widget.update(f"{tps:.1f}")
+                                graph.add_value(tps)
+
+                        if data.get("done"):
+                            total_s = data.get("total_duration", 0) / 1e9
+                            eval_s = data.get("eval_duration", 0) / 1e9
+                            
+                            self.query_one("#lat-wait").update(f"Load: {data.get('load_duration')/1e6:.0f}ms")
+                            self.query_one("#lat-eval").update(f"Eval: {eval_s:.2f}s")
+                            log.write("\n")
+                            self.log_msg(f"Inference complete: {count} tokens in {total_s:.2f}s")
+
+        except Exception as e:
+            log.write(f"\n[red]Error: {e}[/red]")
+
+if __name__ == "__main__":
+    app = SingularityDashboard()
+    app.run()
+
+```
+
+### Setup Instructions
+
+1. **Dependencies**:
+Ensure you have `textual`, `aiohttp`, and `psutil` installed:
+```bash
+pip install textual aiohttp psutil
+
+```
+
+
+2. **Start Your Services**:
+Open three terminals:
+* **Terminal 1 (Model)**:
+```bash
+ollama serve
+
+```
+
+
+* **Terminal 2 (Server)**:
+```bash
+python3 ~/.omarchy/mcp_server.py
+
+```
+
+
+* **Terminal 3 (Dashboard)**:
+```bash
+python3 ~/.omarchy/omarchy_dashboard.py
+
+```
+
+
+
+
+
+### What You Will See
+
+* **System Status**: The "Traffic Lights" for your APIs. If MCP Server is offline, it turns red.
+* **Tool Inspector**: Shows the JSON schema of `search_files`, `apply_edit`, etc., proving the server is ready to accept commands.
+* **Inference Lab**: A chat window where you can test the model. The **Live Metrics** sidebar shows real-time Tokens Per Second (TPS) as the model types.

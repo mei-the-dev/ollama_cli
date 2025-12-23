@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Legacy alias for backward compatibility. Prints deprecation warning then runs the shim.
+echo "Warning: 'omarchy' is deprecated — use 'singularity' instead." >&2
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+exec "${SCRIPT_DIR}/.venv/bin/python" "${SCRIPT_DIR}/omarchy_cli.py" "$@"
