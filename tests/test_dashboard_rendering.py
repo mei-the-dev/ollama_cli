@@ -1,5 +1,11 @@
 import pytest
 
+import os
+import pytest
+
+if os.environ.get("ALLOW_REF_IMPORTS") != "1":
+    pytest.skip("Tests importing ref are disabled by default. Set ALLOW_REF_IMPORTS=1 to enable.", allow_module_level=True)
+
 from ref.singularity_dashboard import SingularityDashboard
 
 

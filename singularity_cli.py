@@ -437,16 +437,62 @@ class SingularityAgent:
                 obj = json.loads(json_str)
                 tool_name = obj.get("tool")
                 tool_args = obj.get("args", {})
+
+                # Validate parsed tool call
+                if not tool_name or not isinstance(tool_name, str):
+                    # Not a valid tool specification; return model text for inspection
+                    return full
+
+                # Normalize common alias tool names
+                alias_map = {
+                    "write_file": "write_code",
+                    "create_file": "write_code",
+                    "read_file": "read_code",
+                }
+                tool_name = alias_map.get(tool_name, tool_name)
+
+                # Normalize common argument names for known tools (e.g., file_path -> filepath)
+                original_args = dict(tool_args) if isinstance(tool_args, dict) else {}
+                if isinstance(tool_args, dict):
+                    for k in ("file_path", "filePath", "path", "filename", "file"):
+                        if k in tool_args and "filepath" not in tool_args:
+                            tool_args["filepath"] = tool_args[k]
+                    for k in ("contents", "text", "body"):
+                        if k in tool_args and "content" not in tool_args:
+                            tool_args["content"] = tool_args[k]
+
+                # Append a system message with parsed and normalized tool call for diagnostics
+                try:
+                    self.conversation_history.append({
+                        "role": "system",
+                        "content": f"Parsed tool call: {json.dumps(obj)} -> normalized to: {{'tool': '{tool_name}', 'args': {json.dumps(tool_args)}}}"
+                    })
+                except Exception:
+                    pass
+
+                # Basic validation for well-known tools
+                if tool_name == "write_code":
+                    missing = []
+                    if "filepath" not in tool_args:
+                        missing.append("filepath")
+                    if "content" not in tool_args:
+                        missing.append("content")
+                    if missing:
+                        return f"✗ Tool {tool_name} error: missing required arguments: {', '.join(missing)}"
+
                 # Execute the tool via MCP
                 res = await self.call_mcp_tool(tool_name, tool_args)
 
                 # Append a system message with tool result to history
                 self.conversation_history.append({"role": "system", "content": f"Tool {tool_name} executed with result: {res}"})
 
-                if res.get("status") == "SUCCESS":
+                # Treat response as failure if status is not SUCCESS or data contains an 'error' key
+                data = res.get("data") if isinstance(res, dict) else None
+                if res.get("status") == "SUCCESS" and not (isinstance(data, dict) and data.get("error")):
                     return f"✓ Executed {tool_name}: {json.dumps(res.get('data', {}), indent=2)}"
                 else:
-                    return f"✗ Tool {tool_name} error: {res.get('error')}"
+                    err_msg = res.get("error") or (data.get("error") if isinstance(data, dict) else None) or "Unknown error"
+                    return f"✗ Tool {tool_name} error: {err_msg}"
             except json.JSONDecodeError:
                 # Not a valid JSON tool call — fall through to return the text
                 pass

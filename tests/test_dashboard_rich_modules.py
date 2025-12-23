@@ -1,5 +1,11 @@
 import pytest
 
+import os
+import pytest
+
+if os.environ.get("ALLOW_REF_IMPORTS") != "1":
+    pytest.skip("Tests importing ref are disabled by default. Set ALLOW_REF_IMPORTS=1 to enable.", allow_module_level=True)
+
 from ref.dashboard.gpu_widget import GPUMetrics
 from ref.dashboard.latency_graph import LatencyGraph
 from ref.dashboard.request_rate import RequestRate

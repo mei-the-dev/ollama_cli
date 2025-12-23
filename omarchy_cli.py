@@ -20,13 +20,18 @@ except Exception:
 OmarchyAgent = SingularityAgent  # type: ignore[name-defined]
 OmarchyCLI = SingularityCLI  # type: ignore[name-defined]
 
-if __name__ == "__main__":
+def run():
+    """Sync entry point for console_scripts and installer-friendly invocation."""
     warnings.warn(
         "The 'omarchy' command and API are deprecated; please use 'singularity' instead.",
         DeprecationWarning,
     )
+    asyncio.run(main())
+
+
+if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        run()
     except KeyboardInterrupt:
         try:
             from rich.console import Console

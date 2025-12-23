@@ -46,3 +46,34 @@ async def test_process_with_tools_calls_mcp(monkeypatch):
 
     res = await agent.process_with_tools('do the thing')
     assert 'Executed' in res or res.startswith('✓')
+
+
+@pytest.mark.asyncio
+async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path):
+    agent = singularity_cli.SingularityAgent()
+
+    target = str(tmp_path / "live_test.txt")
+    chunks = [
+        '```json\n{\n  "tool": "write_file",\n  "args": {\n    "file_path": "',
+        target,
+        '",\n    "content": "hello"\n  }\n}\n```',
+    ]
+
+    async def gen(prompt, system=None, timeout=120.0):
+        async for c in fake_stream_gen(chunks):
+            yield c
+
+    agent.generate_streaming = gen
+
+    # Mock call_mcp_tool to assert normalized args
+    async def fake_call(name, args, timeout=30.0, retries=2):
+        assert name == 'write_code'
+        assert args.get('filepath') == target
+        assert args.get('content') == 'hello'
+        return {'status': 'SUCCESS', 'data': {'ok': True}}
+
+    monkeypatch.setattr(agent, 'call_mcp_tool', fake_call)
+
+    res = await agent.process_with_tools('please write the file')
+    assert 'Executed' in res or res.startswith('✓')
+

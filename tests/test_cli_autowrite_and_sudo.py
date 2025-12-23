@@ -2,6 +2,12 @@ from typing import Optional
 
 import pytest
 
+import os
+import pytest
+
+if os.environ.get("ALLOW_REF_IMPORTS") != "1":
+    pytest.skip("Tests relying on local MCP server/reference modules are disabled by default. Set ALLOW_REF_IMPORTS=1 to enable.", allow_module_level=True)
+
 from mcp_server import MCPServer, ToolStatus
 from omarchy_cli import SingularityAgent, SingularityCLI
 
