@@ -807,11 +807,15 @@ class SingularityCLI:
         console.clear()
         # Create a two-column header with the banner and quick tips
         left = Panel(BANNER, border_style="magenta", padding=(1, 2))
-        tips = Panel(
-            "[bold]Quick Tips[/bold]\n- Use [cyan]@file.py[/cyan] to inject a file into context\n- Use [cyan]@web:http://...[/cyan] to fetch docs\n- Use [cyan]/mode code[/cyan] to generate code\n\nType [cyan]help[/cyan] to see commands",
-            border_style="green",
-            padding=(1, 2),
+        tips_text = (
+            "[bold]Quick Tips[/bold]\n"
+            "- Use [cyan]@file.py[/cyan] to inject a file into context\n"
+            "- Use [cyan]@web:http://...[/cyan] to fetch docs\n"
+            "- Use [cyan]/mode code[/cyan] to generate code\n\n"
+            "Type [cyan]help[/cyan] to see commands"
         )
+        tips = Panel(tips_text, border_style="green", padding=(1, 2),)
+        
         console.print(Columns([left, tips]))
         # Subtle divider
         console.rule(
