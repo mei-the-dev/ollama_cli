@@ -25,9 +25,11 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "reports" / "prompt_test_results.jsonl"
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL") or "http://localhost:11434/api/chat"
+OLLAMA_BASE = os.environ.get("OLLAMA_URL") or "http://localhost:11434"
+OLLAMA_URL = OLLAMA_BASE + "/api/chat"
 USE_LIVE = os.environ.get("RUN_LIVE_OLLAMA") == "1"
 TIMEOUT = 10
+
 
 PROMPTS: List[str] = [
     # 1-10: basic helpers
@@ -93,23 +95,57 @@ PROMPTS: List[str] = [
 
 
 def call_ollama(prompt: str) -> dict:
-    """Call local Ollama chat API with a simple message and return a dict with 'ok' and 'response'."""
+    """Call local Ollama endpoint to generate a response. Tries to detect a model first.
+
+    Supports both /api/chat and /api/generate styles depending on local Ollama.
+    """
+    # discover models
     try:
-        payload = {"messages": [{"role": "user", "content": prompt}], "max_tokens": 1024}
+        tags = requests.get(OLLAMA_BASE + "/api/tags", timeout=3).json()
+        models = [m.get('name') for m in (tags.get('models') or []) if m.get('name')]
+    except Exception:
+        models = []
+
+    # prefer a coder model if present
+    model = None
+    for m in models:
+        if 'coder' in m or 'code' in m:
+            model = m
+            break
+    if not model and models:
+        model = models[0]
+
+    # try /api/generate if available
+    gen_url = OLLAMA_BASE + "/api/generate"
+    try:
+        payload = {"model": model, "prompt": prompt, "max_tokens": 1024} if model else {"prompt": prompt, "max_tokens": 1024}
+        r = requests.post(gen_url, json=payload, timeout=TIMEOUT)
+        if r.status_code == 200:
+            j = r.json()
+            # Ollama generate returns {'id':..., 'choices': [{'content': '...'}], ...}
+            choices = j.get('choices') or []
+            if choices:
+                content = choices[0].get('content') or ''
+            else:
+                content = json.dumps(j)
+            return {"ok": True, "raw": j, "response": content}
+    except Exception:
+        pass
+
+    # fallback to /api/chat
+    try:
+        payload = {"messages": [{"role": "user", "content": prompt}], "max_tokens": 1024, "model": model}
         r = requests.post(OLLAMA_URL, json=payload, timeout=TIMEOUT)
         r.raise_for_status()
         j = r.json()
-        # heuristic: look for reply text in common shapes
         content = None
         if isinstance(j, dict):
-            # Ollama's chat returns {'choices': [{'message': {'content': '...'}}], ...}
             choices = j.get('choices') or []
             if choices and isinstance(choices, list):
                 msg = choices[0].get('message') if isinstance(choices[0], dict) else None
                 if msg and isinstance(msg, dict):
                     content = msg.get('content')
         if content is None:
-            # fallback, stringify json
             content = json.dumps(j)
         return {"ok": True, "raw": j, "response": content}
     except Exception as e:
