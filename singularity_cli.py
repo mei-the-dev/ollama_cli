@@ -15,15 +15,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
-
-import aiohttp
+from typing import Dict
 
 try:
     from rich.columns import Columns
     from rich.console import Console
-    from rich.live import Live
-    from rich.markdown import Markdown
     from rich.panel import Panel
     from rich.prompt import Confirm, Prompt
     from rich.table import Table
@@ -32,8 +28,6 @@ except ImportError:
     subprocess.run([sys.executable, "-m", "pip", "install", "rich"], check=True)
     from rich.columns import Columns
     from rich.console import Console
-    from rich.live import Live
-    from rich.markdown import Markdown
     from rich.panel import Panel
     from rich.prompt import Confirm, Prompt
     from rich.table import Table
@@ -71,23 +65,26 @@ COMPLETE_SYMBOL = "✓"
 ERROR_SYMBOL = "✗"
 
 
-
-
 class SingularityAgent:
     def __init__(self):
         self.model = "Qwen2.5-Coder-14B"
         self.conversation_history = []
         self.current_plan = None
         self.mcp_server_url = None
+
     async def start_mcp_server(self):
         pass
+
     async def stop_mcp_server(self):
         pass
+
     async def execute_with_animation(self, prompt, status, system=None):
         # Dummy implementation for CLI to work
         console.print(f"[bold green]Agent:[/bold green] {prompt}")
+
     def display_plan(self, plan):
         console.print(f"[cyan]Plan:[/cyan] {plan}")
+
 
 class SingularityCLI:
     def __init__(self):
