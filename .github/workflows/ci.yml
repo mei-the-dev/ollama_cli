@@ -21,7 +21,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; else pip install pytest; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; else pip install pytest black isort flake8 mypy pre-commit; fi
 
       - name: Run test suite
         run: python -m pytest -q
+
+      - name: Black check
+        run: python -m black --check .
+
+      - name: isort check
+        run: python -m isort --check-only .
+
+      - name: flake8 lint
+        run: python -m flake8 .
+
+      - name: mypy type check
+        run: python -m mypy .
+
+      - name: pre-commit (optional)
+        run: |
+          python -m pre_commit run --all-files || true
