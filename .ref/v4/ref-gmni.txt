@@ -1,0 +1,442 @@
+This is the final, optimized version of the **Singularity AI CLI**. It integrates all the improvements discussed: **Context Awareness** (files/OS), **Smart AST Slicing** (for faster test analysis), **Safety Guardrails**, and **Git Integration**.
+
+You can copy and paste these 4 files directly.
+
+### 1. `singularity.py` (The Core CLI)
+
+*New Features:*
+
+* **Context-Aware Suggestions:** Reads your shell type and current files to give better commands.
+* **AST Slicing:** Only reads the specific failing test function instead of the whole file.
+* **Git Awareness:** Can check git status if needed.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity CLI - Final Version
+A local AI Pair Programmer inspired by Copilot CLI, powered by Ollama & Qwen.
+Features:
+- Context-Aware Command Suggestions
+- Intelligent Test Analysis (AST Slicing)
+- Git Integration
+- Safety Guardrails
+"""
+
+import asyncio
+import json
+import sys
+import os
+import argparse
+import ast
+import subprocess
+from pathlib import Path
+from typing import List, Dict, Optional
+
+# Check for dependencies
+try:
+    import httpx
+    from rich.console import Console
+    from rich.prompt import Prompt
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+except ImportError:
+    print("Installing dependencies...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "rich", "httpx"])
+    import httpx
+    from rich.console import Console
+    from rich.prompt import Prompt
+
+from reporter import Reporter
+from mcp_server import MCPServer
+
+# Configuration
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODEL = "qwen2.5-coder:14b"
+console = Console()
+
+class SingularityCLI:
+    def __init__(self):
+        self.server = MCPServer()
+        self.reporter = Reporter()
+
+    async def chat_ollama(self, messages: List[Dict], json_mode=False, temperature=0.1) -> str:
+        """Send chat request to Ollama."""
+        payload = {
+            "model": MODEL,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": temperature}
+        }
+        if json_mode:
+            payload["format"] = "json"
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json=payload)
+                resp.raise_for_status()
+                return resp.json()["message"]["content"]
+        except Exception as e:
+            console.print(f"[bold red]Error connecting to Ollama:[/bold red] {e}")
+            sys.exit(1)
+
+    def extract_function_source(self, file_path: str, function_name: str) -> str:
+        """Reads a file and extracts ONLY the source code of the target function using AST."""
+        try:
+            path = Path(file_path)
+            if not path.exists(): return "File not found."
+            
+            source = path.read_text()
+            tree = ast.parse(source)
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == function_name:
+                    lines = source.splitlines()
+                    # Extract specific lines (1-based to 0-based index)
+                    return "\n".join(lines[node.lineno-1 : node.end_lineno])
+            
+            return source[:2000] # Fallback: return first 2000 chars
+        except Exception:
+            return "Could not parse source file."
+
+    async def mode_suggest(self, query: str):
+        """Copilot-like mode: Turn natural language into shell commands."""
+        
+        # 1. Gather Context
+        cwd_files = ", ".join([f.name for f in os.scandir(".") if not f.name.startswith(".")][:10])
+        shell_type = os.environ.get("SHELL", "bash").split("/")[-1]
+        
+        system_prompt = (
+            f"You are an expert command-line assistant for {sys.platform} using {shell_type}. "
+            f"The user is in a directory containing: [{cwd_files}]. "
+            "Translate the user's natural language request into a specific shell command. "
+            "Output ONLY the command string, no explanation. If complex, chain with &&."
+        )
+        
+        # 2. Ask AI
+        with console.status(f"[bold green]Thinking...[/bold green]", spinner="dots"):
+            command = await self.chat_ollama([
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query}
+            ])
+
+        command = command.strip().strip('`')
+        self.reporter.print_copilot_suggestion(query, command)
+        
+        # 3. Interactive Execute/Refine loop
+        action = Prompt.ask(
+            "", 
+            choices=["", "e", "q"], 
+            default="",
+            show_choices=False
+        )
+        
+        if action == "": # Enter key
+            console.print(f"[dim]Executing...[/dim]")
+            os.system(command)
+        elif action == "e": # Explain
+            explanation = await self.chat_ollama([
+                {"role": "user", "content": f"Explain strictly what this command does: {command}"}
+            ])
+            console.print(f"[italic]{explanation}[/italic]")
+
+    async def mode_test_analysis(self):
+        """Run tests and generate 'Context-Rich Cards' using LLM analysis."""
+        console.rule("[bold magenta]Singularity Test Intelligence[/bold magenta]")
+        
+        # 1. Run Tests (Quietly)
+        with console.status("[bold cyan]Running pytest suite...[/bold cyan]", spinner="runner"):
+            result = self.server.run_pytest_quiet()
+        
+        output = result.get("stdout", "") + result.get("stderr", "")
+        
+        # 2. Parse Output
+        failed_tests = []
+        lines = output.splitlines()
+        
+        for i, line in enumerate(lines):
+            if line.startswith("FAILED") or line.startswith("ERROR"):
+                parts = line.split()
+                if len(parts) > 1:
+                    test_id = parts[1] # e.g., tests/test_api.py::test_login
+                    # Grab a chunk of context errors from logs
+                    error_log = "\n".join(lines[i:min(i+15, len(lines))]) 
+                    failed_tests.append({"id": test_id, "log": error_log})
+
+        if not failed_tests:
+            console.print(Panel("[bold green]All tests passed! Code is robust.[/bold green]", border_style="green"))
+            return
+
+        console.print(f"[bold red]Found {len(failed_tests)} failing tests. Analyzing intent...[/bold red]\n")
+
+        # 3. Analyze each failure with LLM
+        for test in failed_tests:
+            # Slicing: Get file path and function name
+            try:
+                if "::" in test['id']:
+                    file_path, func_name = test['id'].split("::")
+                    code_snippet = self.extract_function_source(file_path, func_name)
+                else:
+                    file_path = test['id']
+                    code_snippet = Path(file_path).read_text()[:1000]
+            except:
+                code_snippet = "Could not read file."
+
+            prompt = (
+                f"Analyze this failed test.\n"
+                f"Test Name: {test['id']}\n"
+                f"Error Output: {test['log']}\n"
+                f"Test Code:\n{code_snippet}\n\n"
+                f"Respond in JSON with:\n"
+                f"1. 'intent': A 1-sentence description of what this test was TRYING to verify.\n"
+                f"2. 'diagnosis': A brief explanation of why it failed.\n"
+                f"3. 'fix': A specific code suggestion to fix it."
+            )
+
+            with console.status(f"[bold yellow]Analyzing {test['id']}...[/bold yellow]"):
+                analysis_json = await self.chat_ollama([
+                    {"role": "system", "content": "You are a QA application. Output strictly JSON."},
+                    {"role": "user", "content": prompt}
+                ], json_mode=True)
+            
+            try:
+                data = json.loads(analysis_json)
+            except:
+                data = {"intent": "Analysis failed", "diagnosis": "Could not parse LLM output", "fix": "N/A"}
+
+            # 4. Render Beautiful Card
+            self.reporter.print_test_card(
+                test_name=test['id'], 
+                intent=data.get('intent', 'Unknown Intent'), 
+                status="FAILED", 
+                diagnosis=data.get('diagnosis', ''),
+                fix=data.get('fix', '')
+            )
+
+async def main():
+    parser = argparse.ArgumentParser(description="Singularity AI Agent CLI")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Command: suggest
+    suggest_parser = subparsers.add_parser("suggest", help="Translate natural language to shell commands")
+    suggest_parser.add_argument("query", nargs="+", help="What do you want to do?")
+
+    # Command: test
+    subparsers.add_parser("test", help="Run tests and analyze failures with AI")
+
+    args = parser.parse_args()
+    cli = SingularityCLI()
+
+    if args.command == "suggest":
+        await cli.mode_suggest(" ".join(args.query))
+    elif args.command == "test":
+        await cli.mode_test_analysis()
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        console.print("\n[dim]Aborted.[/dim]")
+
+```
+
+### 2. `reporter.py` (The Visual Engine)
+
+*New Features:*
+
+* **Destructive Command Warning:** Detects `rm`, `sudo`, etc., and changes the UI to red to warn the user.
+* **Refined Layout:** Cleaner grid layout for suggestions.
+
+```python
+#!/usr/bin/env python3
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from rich.syntax import Syntax
+from rich import box
+
+console = Console()
+
+class Reporter:
+    def print_copilot_suggestion(self, query: str, command: str, explanation: str = None):
+        """Displays a Copilot-style command suggestion card with safety checks."""
+        
+        # Safety Guardrail
+        dangerous_keywords = ["rm ", "mv ", "dd ", ">", "sudo ", "reset --hard", ":(){:|:&};:"]
+        is_dangerous = any(k in command for k in dangerous_keywords)
+        
+        border_color = "red" if is_dangerous else "cyan"
+        title = "[blink bold red]⚠️  DESTRUCTIVE COMMAND[/blink bold red]" if is_dangerous else "[bold cyan]Suggested Command[/bold cyan]"
+
+        grid = Table.grid(expand=True)
+        grid.add_column()
+        
+        grid.add_row(f"[dim]Request:[/dim] [italic white]{query}[/italic white]")
+        grid.add_row(Panel(
+            Syntax(command, "bash", theme="monokai", word_wrap=True),
+            border_style=f"bold {border_color}",
+            padding=(1, 2),
+            title=title,
+            title_align="left"
+        ))
+        
+        panel = Panel(
+            grid,
+            border_style=border_color,
+            box=box.ROUNDED,
+            padding=(1, 2)
+        )
+        console.print(panel)
+        
+        # Actions Menu
+        actions = Table.grid(expand=True)
+        actions.add_column(justify="center")
+        actions.add_row("[bold white]ENTER[/bold white] Run  •  [bold white]e[/bold white] Explain  •  [bold white]q[/bold white] Quit")
+        console.print(Panel(actions, style="on grey11", box=box.SIMPLE))
+
+    def print_test_card(self, test_name, intent, status, diagnosis, fix):
+        """Generates the context-rich card for test analysis."""
+        
+        border_color = "red" if status == "FAILED" else "green"
+        icon = "✘" if status == "FAILED" else "✓"
+
+        # Inner Content Table
+        table = Table(box=None, expand=True, show_header=False, padding=(0, 0))
+        table.add_column(style="bold white", width=12)
+        table.add_column(style="dim white")
+
+        # Intent Section
+        table.add_row("[cyan]INTENT[/cyan]", f"[italic]{intent}[/italic]")
+        table.add_row("", "") 
+
+        # Diagnosis Section
+        table.add_row(f"[{border_color}]DIAGNOSIS[/{border_color}]", diagnosis)
+        table.add_row("", "") 
+
+        # Fix/Code Section
+        if fix and fix != "N/A":
+            code_block = Syntax(fix, "python", theme="ansi_dark", line_numbers=False, word_wrap=True)
+            table.add_row("[yellow]SUGGESTION[/yellow]", code_block)
+
+        # Container Panel
+        main_panel = Panel(
+            table,
+            title=f"[bold {border_color}]{icon} {test_name}[/bold {border_color}]",
+            subtitle=f"[dim]Analyzed by Qwen-Coder[/dim]",
+            border_style=border_color,
+            box=box.HEAVY_EDGE,
+            padding=(1, 2)
+        )
+        
+        console.print(main_panel)
+        console.print("") 
+
+```
+
+### 3. `mcp_server.py` (The Backend)
+
+*New Features:*
+
+* **Git Status:** Allows the backend to check git status (prepared for future expansion).
+* **Robust Command Execution:** Timeout handling.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity MCP Server
+Provides tools for the agent to interact with the OS and Filesystem.
+"""
+
+import subprocess
+import os
+from pathlib import Path
+from enum import Enum
+from typing import Any, Dict
+
+class ToolStatus(Enum):
+    SUCCESS = "SUCCESS"
+    ERROR = "ERROR"
+
+class MCPServer:
+    """Core toolset provider."""
+
+    def execute_command(self, args: Dict[str, Any]):
+        """Executes a shell command safely."""
+        command = args.get("command")
+        try:
+            result = subprocess.run(
+                command, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=30
+            )
+            return {
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_git_status(self, args: Dict[str, Any] = None):
+        """Returns the current git status and diff summary."""
+        try:
+            status = subprocess.check_output("git status -s", shell=True, text=True)
+            if not status:
+                return {"status": "Clean working tree"}
+            return {"status": status}
+        except subprocess.CalledProcessError:
+            return {"error": "Not a git repository."}
+
+    def read_file(self, args: Dict[str, Any]):
+        """Reads file content for context."""
+        path = Path(args.get("path"))
+        if not path.exists():
+            return {"error": "File not found"}
+        return {"content": path.read_text(), "path": str(path)}
+
+    def run_pytest_quiet(self, args: Dict[str, Any] = None):
+        """Runs pytest specifically for the CLI analysis mode."""
+        cmd = "pytest --disable-warnings -q --tb=short"
+        return self.execute_command({"command": cmd})
+
+```
+
+### 4. `install_script.sh` (Installer)
+
+*Refined:* Checks for `ollama` availability more robustly.
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🔮 Installing Singularity AI CLI (Optimized)..."
+
+# 1. Check/Install Python Dependencies
+echo "📦 Installing Python requirements (rich, httpx)..."
+pip install rich httpx --quiet
+
+# 2. Check Ollama
+if ! command -v ollama &> /dev/null; then
+    echo "❌ Ollama not found. Please install Ollama from https://ollama.com/"
+    exit 1
+fi
+
+# 3. Pull the Model
+MODEL="qwen2.5-coder:14b"
+echo "🤖 Pulling model: $MODEL (This may take a while)..."
+ollama pull $MODEL
+
+# 4. Make executable
+chmod +x singularity.py mcp_server.py reporter.py
+
+# 5. Summary
+echo ""
+echo "✅ Installation complete!"
+echo "Run:"
+echo "  ./singularity.py suggest 'delete all png files in downloads'"
+echo "  ./singularity.py test"
+
+```

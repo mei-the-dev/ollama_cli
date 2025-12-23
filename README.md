@@ -12,6 +12,15 @@ Quick start
 2. Start the CLI: `singularity` (legacy: `omarchy` alias supported)
 3. Use `/mode code` and ask for code generation. To let the agent write files automatically, enable startup auto-apply.
 
+Local testing (fast checks):
+
+- Run `make test-local` to execute a focused local test suite:
+  - Fast pytest subset (excludes `live` and `slow` tests)
+  - Interactive CLI smoke test that verifies `/mode code` returns code-like output
+  - Placeholder scan against `logs/singularity.log` and `logs/test_model_events.jsonl`
+
+This gives a quick, strong local validation loop before pushing changes.
+
 Documentation
 See `docs/USER_GUIDE.md` for full usage, configuration, and security guidance.
 

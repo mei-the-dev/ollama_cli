@@ -17,7 +17,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -52,7 +52,8 @@ class ModelEventLogger:
         `event` is a short string (PROMPT/ASSISTANT/PARSED_TOOL).
         `payload` is a JSON-serializable dict.
         """
-        ts = datetime.utcnow().isoformat() + "Z"
+        # Use timezone-aware UTC timestamps to avoid deprecation warnings
+        ts = datetime.now(timezone.utc).isoformat()
         ev = ModelEvent(ts=ts, test=self.test_node, event=event, payload=payload)
         self._events.append(ev)
         # Append to file immediately so external tools can read streaming

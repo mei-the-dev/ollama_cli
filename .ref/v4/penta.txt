@@ -1,0 +1,1021 @@
+This is a **benchmark-optimized implementation**. It focuses on modularity, robust error handling, token efficiency (via AST slicing), and a polished UI.
+
+I have separated the logic into four distinct files for maintainability and performance:
+
+1. **`mcp_tools.py`**: Handles OS interactions, AST parsing (optimization), and Git context.
+2. **`reporter.py`**: Dedicated UI engine using `rich` for the "beautiful cards".
+3. **`agent.py`**: The LLM interface (Ollama) handling prompt engineering and context injection.
+4. **`singularity.py`**: The CLI entry point.
+5. **`install_setup.sh`**: Automated setup script.
+
+### 1. `mcp_tools.py` (The Backend & Optimization Layer)
+
+**Key Benchmark Feature:** **AST Slicing**. Instead of feeding the LLM an entire 2,000-line test file, this module parses the Python Abstract Syntax Tree to extract *only* the specific failing test function. This reduces latency and improves accuracy significantly.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity MCP Tools
+Handles File I/O, AST Parsing (for Context Slicing), and System Commands.
+"""
+import ast
+import subprocess
+import os
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+class MCPTools:
+    def run_command(self, cmd: str, timeout: int = 30) -> Dict[str, Any]:
+        """Executes a shell command safely."""
+        try:
+            result = subprocess.run(
+                cmd, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout
+            )
+            return {
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+                "code": result.returncode
+            }
+        except subprocess.TimeoutExpired:
+            return {"error": "Command timed out", "code": -1}
+        except Exception as e:
+            return {"error": str(e), "code": -1}
+
+    def get_git_context(self) -> str:
+        """Returns a summary of git status for context awareness."""
+        if not Path(".git").exists():
+            return "Not a git repository."
+        
+        try:
+            branch = subprocess.check_output("git branch --show-current", shell=True, text=True).strip()
+            status = subprocess.check_output("git status -s", shell=True, text=True).strip()
+            return f"Branch: {branch}\nChanges:\n{status}" if status else f"Branch: {branch} (Clean)"
+        except:
+            return "Git error."
+
+    def get_directory_context(self) -> str:
+        """Returns listing of current directory (non-hidden)."""
+        try:
+            files = [f.name for f in os.scandir(".") if not f.name.startswith(".")]
+            return ", ".join(files[:20]) # Limit to 20 to save tokens
+        except:
+            return "Unknown"
+
+    def extract_test_source(self, file_path: str, test_name: str) -> str:
+        """
+        OPTIMIZATION: Uses AST to extract ONLY the failing test function.
+        This reduces token usage and noise for the LLM.
+        """
+        path = Path(file_path)
+        if not path.exists():
+            return f"Error: File {file_path} not found."
+
+        try:
+            source = path.read_text()
+            tree = ast.parse(source)
+            
+            # 1. Try to find the specific function
+            clean_name = test_name.split("::")[-1] # Handle 'file.py::test_func'
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == clean_name:
+                    lines = source.splitlines()
+                    # Extract lines (converting 1-based lineno to 0-based index)
+                    snippet = "\n".join(lines[node.lineno-1 : node.end_lineno])
+                    return snippet
+            
+            # 2. Fallback: Return file head if function not found
+            return source[:1500] + "\n... (truncated)"
+        except Exception as e:
+            return f"Error parsing source: {str(e)}"
+
+    def run_pytest_analysis(self):
+        """Runs pytest quietly and returns structured failure data."""
+        # We use -rf to show reasons for failure, --tb=short for concise stack traces
+        cmd = "pytest -rf --tb=short --disable-warnings"
+        return self.run_command(cmd, timeout=60)
+
+```
+
+### 2. `reporter.py` (The Visual Engine)
+
+**Key Benchmark Feature:** **Context-Rich Cards**. Uses `rich` tables inside panels to create a structured UI. It also includes a "Destructive Command" detector that changes the UI color to red if the LLM suggests dangerous commands (like `rm` or `sudo`).
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity Reporter
+Handles all Rich UI rendering, ensuring 'Context-Rich Cards'.
+"""
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.syntax import Syntax
+from rich import box
+from rich.text import Text
+
+console = Console()
+
+class Reporter:
+    def render_suggestion(self, query: str, command: str, explanation: str = None):
+        """Renders the Copilot-style suggestion card."""
+        
+        # Safety Analysis
+        dangerous_flags = ["rm ", "mv ", "dd ", ">", "sudo ", ":(){:|:&};:", "mkfs", "chmod 777"]
+        is_dangerous = any(flag in command for flag in dangerous_flags)
+        
+        theme_color = "red" if is_dangerous else "cyan"
+        icon = "⚠️ " if is_dangerous else "⚡"
+        title = f"{icon} [bold {theme_color}]Command Suggestion[/bold {theme_color}]"
+
+        # Grid Layout
+        grid = Table.grid(expand=True)
+        grid.add_column()
+        
+        # Request
+        grid.add_row(f"[dim]Goal:[/dim] [italic white]{query}[/italic white]")
+        grid.add_row("") # Spacer
+
+        # Command Box
+        cmd_panel = Panel(
+            Syntax(command, "bash", theme="monokai", word_wrap=True),
+            border_style=f"bold {theme_color}",
+            padding=(1, 2)
+        )
+        grid.add_row(cmd_panel)
+
+        if explanation:
+            grid.add_row("")
+            grid.add_row(f"[dim]{explanation}[/dim]")
+
+        # Main Container
+        console.print(Panel(
+            grid,
+            title=title,
+            title_align="left",
+            border_style=theme_color,
+            box=box.ROUNDED,
+            padding=(1, 2)
+        ))
+
+        # Instructions
+        if is_dangerous:
+            console.print("[bold red]CAUTION: This command modifies the system.[/bold red]", justify="center")
+        
+        menu = Table.grid(expand=True)
+        menu.add_column(justify="center")
+        menu.add_row("[bold white]ENTER[/bold white] Execute  •  [bold white]e[/bold white] Explain  •  [bold white]q[/bold white] Cancel")
+        console.print(Panel(menu, style="on grey11", box=box.SIMPLE))
+
+    def render_test_card(self, test_id: str, intent: str, diagnosis: str, fix: str, status: str = "FAILED"):
+        """Renders a beautiful context-rich card for test analysis."""
+        
+        color = "red" if status == "FAILED" else "green"
+        icon = "✘" if status == "FAILED" else "✓"
+        
+        # Layout Table
+        table = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+        table.add_column(style="bold white", width=14, justify="right") # Labels
+        table.add_column(style="white") # Content
+
+        # Row 1: Intent
+        table.add_row("[cyan]INTENT[/cyan]", f"[italic]{intent}[/italic]")
+        table.add_row("", "") # Spacer
+
+        # Row 2: Diagnosis
+        table.add_row(f"[{color}]DIAGNOSIS[/{color}]", diagnosis)
+        table.add_row("", "") # Spacer
+
+        # Row 3: Fix
+        if fix and fix != "N/A":
+            # Heuristic to detect if fix is code or text
+            if "def " in fix or "assert " in fix or "=" in fix:
+                fix_render = Syntax(fix, "python", theme="ansi_dark", line_numbers=False, word_wrap=True)
+            else:
+                fix_render = fix
+            table.add_row("[yellow]SUGGESTION[/yellow]", fix_render)
+
+        # Outer Panel
+        panel = Panel(
+            table,
+            title=f"[bold {color}]{icon} {test_id}[/bold {color}]",
+            subtitle="[dim]Analyzed by Qwen2.5-Coder[/dim]",
+            border_style=color,
+            box=box.HEAVY_EDGE,
+            padding=(1, 1)
+        )
+        console.print(panel)
+        console.print("") # Margin bottom
+
+```
+
+### 3. `agent.py` (The Brain)
+
+**Key Benchmark Feature:** **Context Injection**. Before asking Ollama for a command, this agent injects the OS type, Shell type, current files, and Git status into the system prompt. This prevents generic answers and ensures commands work for *your* specific environment.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity Agent
+Handles communication with Ollama and Prompt Engineering.
+"""
+import sys
+import os
+import json
+import httpx
+from typing import List, Dict
+
+# Configuration
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODEL = "qwen2.5-coder:14b" # Can be swapped for 7b or 32b
+
+class Agent:
+    def __init__(self, mcp_tools):
+        self.tools = mcp_tools
+
+    async def _chat(self, messages: List[Dict], json_mode: bool = False, temperature: float = 0.1) -> str:
+        """Internal method to hit Ollama API."""
+        payload = {
+            "model": MODEL,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": temperature}
+        }
+        if json_mode:
+            payload["format"] = "json"
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json=payload)
+                resp.raise_for_status()
+                return resp.json()["message"]["content"]
+        except httpx.ConnectError:
+            print(f"Error: Could not connect to Ollama at {OLLAMA_URL}. Is it running?")
+            sys.exit(1)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    async def suggest_command(self, query: str) -> str:
+        """Generates a shell command based on natural language."""
+        
+        # 1. Gather Context
+        shell = os.environ.get("SHELL", "/bin/bash").split("/")[-1]
+        os_name = sys.platform
+        files = self.tools.get_directory_context()
+        git_info = self.tools.get_git_context()
+
+        # 2. Build Prompt
+        system_prompt = (
+            f"You are an expert CLI assistant for {os_name} using {shell}. "
+            f"Current Directory Files: [{files}]. "
+            f"Git Status: [{git_info}]. "
+            "Translate the user request into a precise shell command. "
+            "Reply ONLY with the command string. No markdown, no explanations. "
+            "If multiple steps are needed, chain them with &&."
+        )
+
+        # 3. Call LLM
+        return await self._chat([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ])
+
+    async def explain_command(self, command: str) -> str:
+        """Explains a command in plain English."""
+        return await self._chat([
+            {"role": "system", "content": "Explain this command briefly and clearly."},
+            {"role": "user", "content": command}
+        ])
+
+    async def analyze_test_failure(self, test_id: str, error_log: str, source_code: str) -> Dict:
+        """Analyzes a test failure and returns structured JSON."""
+        
+        prompt = (
+            f"Analyze this failed Python test.\n\n"
+            f"Test Name: {test_id}\n"
+            f"Error Log: {error_log}\n"
+            f"Source Code:\n{source_code}\n\n"
+            f"Respond with a JSON object containing:\n"
+            f"1. 'intent': (string) What was the test trying to verify?\n"
+            f"2. 'diagnosis': (string) Why did it fail? Be specific.\n"
+            f"3. 'fix': (string) A corrected code snippet or specific action."
+        )
+
+        response = await self._chat([
+            {"role": "system", "content": "You are a QA automation expert. Output strict JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True)
+
+        try:
+            return json.loads(response)
+        except:
+            return {
+                "intent": "Analysis failed",
+                "diagnosis": "Could not parse LLM JSON response.",
+                "fix": "N/A"
+            }
+
+```
+
+### 4. `singularity.py` (The CLI Orchestrator)
+
+**Key Benchmark Feature:** **Workflow Flow**. Integrates the components. It parses arguments, invokes the specific mode (`suggest` vs `test`), manages the async event loop, and handles user input loops.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity CLI - Benchmark Edition
+The main entry point. Orchestrates Agent, Tools, and Reporter.
+"""
+import asyncio
+import argparse
+import sys
+import os
+
+# Check libraries immediately
+try:
+    from rich.prompt import Prompt
+    from rich.console import Console
+except ImportError:
+    print("Installing requirements...")
+    os.system(f"{sys.executable} -m pip install rich httpx")
+    from rich.prompt import Prompt
+    from rich.console import Console
+
+from mcp_tools import MCPTools
+from reporter import Reporter
+from agent import Agent
+
+console = Console()
+
+class SingularityCLI:
+    def __init__(self):
+        self.tools = MCPTools()
+        self.reporter = Reporter()
+        self.agent = Agent(self.tools)
+
+    async def mode_suggest(self, query: str):
+        """Mode: Natural Language -> Shell Command"""
+        
+        with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+            command = await self.agent.suggest_command(query)
+            command = command.strip().strip('`').strip()
+
+        self.reporter.render_suggestion(query, command)
+
+        # Interactive Loop
+        while True:
+            choice = Prompt.ask(
+                "", 
+                choices=["", "e", "q"], 
+                show_choices=False, 
+                default=""
+            )
+
+            if choice == "": # Execute
+                console.print(f"[dim]Running: {command}[/dim]")
+                result = self.tools.run_command(command)
+                
+                if result['code'] == 0:
+                    console.print(result['stdout'])
+                    console.print("[bold green]Success[/bold green]")
+                else:
+                    console.print(result['stderr'])
+                    console.print(f"[bold red]Failed (Exit {result['code']})[/bold red]")
+                break
+                
+            elif choice == "e": # Explain
+                with console.status("[dim]Generating explanation...[/dim]"):
+                    explanation = await self.agent.explain_command(command)
+                self.reporter.render_suggestion(query, command, explanation)
+                # Loop continues to allow execution after explanation
+                
+            elif choice == "q":
+                console.print("[dim]Aborted.[/dim]")
+                break
+
+    async def mode_test_analysis(self):
+        """Mode: Intelligent Test Suite Analysis"""
+        console.rule("[bold magenta]Singularity Test Intelligence[/bold magenta]")
+
+        # 1. Run Tests
+        with console.status("[bold cyan]Running pytest suite...[/bold cyan]", spinner="runner"):
+            result = self.tools.run_pytest_analysis()
+        
+        if result['code'] == 0:
+            console.print(Panel("[bold green]All tests passed![/bold green]", border_style="green"))
+            return
+
+        # 2. Parse Failures (Simple Parser)
+        output = result['stdout'] + "\n" + result['stderr']
+        failed_tests = []
+        lines = output.splitlines()
+        
+        for i, line in enumerate(lines):
+            # Pytest short trace format parsing
+            if line.startswith("FAILED") or line.startswith("ERROR"):
+                parts = line.split()
+                if len(parts) > 1:
+                    test_id = parts[1]
+                    # Capture next 20 lines as error context
+                    log_snippet = "\n".join(lines[i:min(i+20, len(lines))])
+                    failed_tests.append({"id": test_id, "log": log_snippet})
+
+        console.print(f"[bold red]Found {len(failed_tests)} failures. Starting AI Analysis...[/bold red]\n")
+
+        # 3. Analyze Each Failure
+        for test in failed_tests:
+            test_id = test['id']
+            
+            # Extract Source (AST Slicing)
+            file_path = test_id.split("::")[0]
+            source_code = self.tools.extract_test_source(file_path, test_id)
+            
+            with console.status(f"[bold yellow]Analyzing {test_id}...[/bold yellow]"):
+                analysis = await self.agent.analyze_test_failure(test_id, test['log'], source_code)
+            
+            # Render Card
+            self.reporter.render_test_card(
+                test_id,
+                analysis.get('intent', 'Unknown'),
+                analysis.get('diagnosis', 'Analysis failed'),
+                analysis.get('fix', 'N/A')
+            )
+
+async def main():
+    parser = argparse.ArgumentParser(description="Singularity: AI Code Agent")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Suggest Command
+    suggest = subparsers.add_parser("suggest", help="Natural language to shell")
+    suggest.add_argument("query", nargs="+", help="What to do?")
+
+    # Test Command
+    subparsers.add_parser("test", help="Analyze pytest results")
+
+    args = parser.parse_args()
+    cli = SingularityCLI()
+
+    try:
+        if args.command == "suggest":
+            await cli.mode_suggest(" ".join(args.query))
+        elif args.command == "test":
+            await cli.mode_test_analysis()
+        else:
+            parser.print_help()
+    except KeyboardInterrupt:
+        print("\nGoodbye.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+```
+
+### 5. `install_setup.sh` (The Bootstrapper)
+
+Standard setup script. Checks dependencies and ensures the specific model is pulled.
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🚀 Setting up Singularity (Benchmark Edition)..."
+
+# 1. Install Python Libs
+if command -v pip &> /dev/null; then
+    echo "📦 Installing Python dependencies..."
+    pip install rich httpx --quiet
+else
+    echo "❌ pip not found. Please install Python pip."
+    exit 1
+fi
+
+# 2. Check Ollama
+if ! command -v ollama &> /dev/null; then
+    echo "❌ Ollama not found. Please install from https://ollama.com"
+    exit 1
+fi
+
+# 3. Pull Model (Background check)
+MODEL="qwen2.5-coder:14b"
+if ! ollama list | grep -q "$MODEL"; then
+    echo "⬇️  Pulling model: $MODEL..."
+    ollama pull $MODEL
+else
+    echo "✅ Model $MODEL is ready."
+fi
+
+# 4. Permissions
+chmod +x singularity.py mcp_tools.py reporter.py agent.py
+
+echo ""
+echo "✅ Installation Complete."
+echo "Try: ./singularity.py suggest 'list all files larger than 10MB'"
+
+```
+
+### How to Run the Benchmark
+
+1. Save all 5 files in one folder.
+2. Run `bash install_setup.sh`.
+3. Run `./singularity.py suggest "check if port 8080 is in use"` (Tests Suggest Mode).
+4. Run `./singularity.py test` (Tests Test Mode - requires a folder with failing tests).
+
+Here are the updated files integrating the **Test Factory**. This feature allows you to point the CLI at any Python file (e.g., `singularity.py factory my_script.py`), and it will intelligently generate a complete `pytest` suite for it.
+
+### 1. `mcp_tools.py`
+
+**Changes:** Added `save_file` capability and a helper to ensure a `tests/` directory exists.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity MCP Tools
+Handles File I/O, AST Parsing, and System Commands.
+"""
+import ast
+import subprocess
+import os
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+class MCPTools:
+    def run_command(self, cmd: str, timeout: int = 30) -> Dict[str, Any]:
+        """Executes a shell command safely."""
+        try:
+            result = subprocess.run(
+                cmd, 
+                shell=True, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout
+            )
+            return {
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+                "code": result.returncode
+            }
+        except subprocess.TimeoutExpired:
+            return {"error": "Command timed out", "code": -1}
+        except Exception as e:
+            return {"error": str(e), "code": -1}
+
+    def get_git_context(self) -> str:
+        """Returns a summary of git status for context awareness."""
+        if not Path(".git").exists():
+            return "Not a git repository."
+        try:
+            branch = subprocess.check_output("git branch --show-current", shell=True, text=True).strip()
+            status = subprocess.check_output("git status -s", shell=True, text=True).strip()
+            return f"Branch: {branch}\nChanges:\n{status}" if status else f"Branch: {branch} (Clean)"
+        except:
+            return "Git error."
+
+    def get_directory_context(self) -> str:
+        """Returns listing of current directory (non-hidden)."""
+        try:
+            files = [f.name for f in os.scandir(".") if not f.name.startswith(".")]
+            return ", ".join(files[:20])
+        except:
+            return "Unknown"
+
+    def read_file(self, path: str) -> str:
+        """Reads file content."""
+        p = Path(path)
+        if not p.exists(): return None
+        return p.read_text()
+
+    def save_to_file(self, filename: str, content: str) -> str:
+        """Saves content to a file, ensuring directory exists."""
+        try:
+            p = Path(filename)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content)
+            return f"Saved to {filename}"
+        except Exception as e:
+            return f"Error saving file: {e}"
+
+    def extract_test_source(self, file_path: str, test_name: str) -> str:
+        """Uses AST to extract ONLY the failing test function."""
+        path = Path(file_path)
+        if not path.exists():
+            return f"Error: File {file_path} not found."
+
+        try:
+            source = path.read_text()
+            tree = ast.parse(source)
+            clean_name = test_name.split("::")[-1]
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == clean_name:
+                    lines = source.splitlines()
+                    snippet = "\n".join(lines[node.lineno-1 : node.end_lineno])
+                    return snippet
+            return source[:1500] + "\n... (truncated)"
+        except Exception as e:
+            return f"Error parsing source: {str(e)}"
+
+    def run_pytest_analysis(self):
+        """Runs pytest quietly."""
+        cmd = "pytest -rf --tb=short --disable-warnings"
+        return self.run_command(cmd, timeout=60)
+
+```
+
+### 2. `agent.py`
+
+**Changes:** Added `craft_test_suite`. It prompts the LLM to act as a QA Engineer, analyzing the source code and outputting a valid `pytest` file.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity Agent
+Handles communication with Ollama and Prompt Engineering.
+"""
+import sys
+import os
+import json
+import httpx
+from typing import List, Dict
+
+# Configuration
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODEL = "qwen2.5-coder:14b"
+
+class Agent:
+    def __init__(self, mcp_tools):
+        self.tools = mcp_tools
+
+    async def _chat(self, messages: List[Dict], json_mode: bool = False, temperature: float = 0.1) -> str:
+        """Internal method to hit Ollama API."""
+        payload = {
+            "model": MODEL,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": temperature}
+        }
+        if json_mode:
+            payload["format"] = "json"
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json=payload)
+                resp.raise_for_status()
+                return resp.json()["message"]["content"]
+        except httpx.ConnectError:
+            print(f"Error: Could not connect to Ollama at {OLLAMA_URL}. Is it running?")
+            sys.exit(1)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    async def suggest_command(self, query: str) -> str:
+        """Generates a shell command based on natural language."""
+        shell = os.environ.get("SHELL", "/bin/bash").split("/")[-1]
+        os_name = sys.platform
+        files = self.tools.get_directory_context()
+        git_info = self.tools.get_git_context()
+
+        system_prompt = (
+            f"You are an expert CLI assistant for {os_name} using {shell}. "
+            f"Current Directory Files: [{files}]. "
+            f"Git Status: [{git_info}]. "
+            "Translate the user request into a precise shell command. "
+            "Reply ONLY with the command string."
+        )
+
+        return await self._chat([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query}
+        ])
+
+    async def explain_command(self, command: str) -> str:
+        return await self._chat([
+            {"role": "system", "content": "Explain this command briefly and clearly."},
+            {"role": "user", "content": command}
+        ])
+
+    async def analyze_test_failure(self, test_id: str, error_log: str, source_code: str) -> Dict:
+        """Analyzes a test failure and returns structured JSON."""
+        prompt = (
+            f"Analyze this failed Python test.\n"
+            f"Test Name: {test_id}\n"
+            f"Error Log: {error_log}\n"
+            f"Source Code:\n{source_code}\n\n"
+            f"Respond with a JSON object containing:\n"
+            f"1. 'intent': (string) What was the test trying to verify?\n"
+            f"2. 'diagnosis': (string) Why did it fail? Be specific.\n"
+            f"3. 'fix': (string) A corrected code snippet or specific action."
+        )
+
+        response = await self._chat([
+            {"role": "system", "content": "You are a QA automation expert. Output strict JSON."},
+            {"role": "user", "content": prompt}
+        ], json_mode=True)
+
+        try:
+            return json.loads(response)
+        except:
+            return {"intent": "Analysis failed", "diagnosis": "Invalid JSON", "fix": "N/A"}
+
+    async def craft_test_suite(self, filename: str, source_code: str) -> str:
+        """Generates a complete pytest suite for a given source file."""
+        prompt = (
+            f"You are a Senior QA Engineer. Write a comprehensive 'pytest' suite for the following code.\n"
+            f"Target File: {filename}\n"
+            f"Source Code:\n```python\n{source_code}\n```\n\n"
+            f"Requirements:\n"
+            f"1. Import the module correctly (assuming {filename} is in the same path).\n"
+            f"2. Cover happy paths and edge cases.\n"
+            f"3. Use pytest fixtures where appropriate.\n"
+            f"4. Output ONLY the raw Python code for the test file. Do not use Markdown blocks."
+        )
+
+        response = await self._chat([
+            {"role": "system", "content": "Output only valid Python code. No text explanations."},
+            {"role": "user", "content": prompt}
+        ])
+        
+        # Cleanup: remove markdown if the model hallucinates it
+        return response.strip().replace("```python", "").replace("```", "")
+
+```
+
+### 3. `reporter.py`
+
+**Changes:** Added `render_code_preview` to display the generated test suite nicely before saving.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity Reporter
+Handles all Rich UI rendering, ensuring 'Context-Rich Cards'.
+"""
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.syntax import Syntax
+from rich import box
+
+console = Console()
+
+class Reporter:
+    def render_suggestion(self, query: str, command: str, explanation: str = None):
+        """Renders the Copilot-style suggestion card."""
+        dangerous_flags = ["rm ", "mv ", "dd ", ">", "sudo ", ":(){:|:&};:", "mkfs"]
+        is_dangerous = any(flag in command for flag in dangerous_flags)
+        
+        theme_color = "red" if is_dangerous else "cyan"
+        title = f"[bold {theme_color}]Command Suggestion[/bold {theme_color}]"
+
+        grid = Table.grid(expand=True)
+        grid.add_column()
+        grid.add_row(f"[dim]Goal:[/dim] [italic white]{query}[/italic white]")
+        grid.add_row("") 
+
+        cmd_panel = Panel(
+            Syntax(command, "bash", theme="monokai", word_wrap=True),
+            border_style=f"bold {theme_color}",
+            padding=(1, 2)
+        )
+        grid.add_row(cmd_panel)
+
+        if explanation:
+            grid.add_row("")
+            grid.add_row(f"[dim]{explanation}[/dim]")
+
+        console.print(Panel(
+            grid,
+            title=title,
+            title_align="left",
+            border_style=theme_color,
+            box=box.ROUNDED,
+            padding=(1, 2)
+        ))
+        
+        if is_dangerous:
+            console.print("[bold red]CAUTION: This command modifies the system.[/bold red]", justify="center")
+
+        self.print_menu(["ENTER: Execute", "e: Explain", "q: Cancel"])
+
+    def render_test_card(self, test_id: str, intent: str, diagnosis: str, fix: str, status: str = "FAILED"):
+        """Renders a beautiful context-rich card for test analysis."""
+        color = "red" if status == "FAILED" else "green"
+        icon = "✘" if status == "FAILED" else "✓"
+        
+        table = Table(box=None, expand=True, show_header=False, padding=(0, 1))
+        table.add_column(style="bold white", width=14, justify="right")
+        table.add_column(style="white")
+
+        table.add_row("[cyan]INTENT[/cyan]", f"[italic]{intent}[/italic]")
+        table.add_row("", "") 
+        table.add_row(f"[{color}]DIAGNOSIS[/{color}]", diagnosis)
+        table.add_row("", "") 
+
+        if fix and fix != "N/A":
+            if "def " in fix or "assert " in fix or "=" in fix:
+                fix_render = Syntax(fix, "python", theme="ansi_dark", line_numbers=False, word_wrap=True)
+            else:
+                fix_render = fix
+            table.add_row("[yellow]SUGGESTION[/yellow]", fix_render)
+
+        panel = Panel(
+            table,
+            title=f"[bold {color}]{icon} {test_id}[/bold {color}]",
+            subtitle="[dim]Analyzed by Qwen2.5-Coder[/dim]",
+            border_style=color,
+            box=box.HEAVY_EDGE,
+            padding=(1, 1)
+        )
+        console.print(panel)
+        console.print("")
+
+    def render_code_preview(self, filename: str, code: str):
+        """Shows a preview of generated code (for Factory mode)."""
+        syntax = Syntax(code, "python", theme="monokai", line_numbers=True)
+        console.print(Panel(
+            syntax,
+            title=f"[bold green]Generated: {filename}[/bold green]",
+            border_style="green",
+            box=box.ROUNDED,
+            padding=(1, 1)
+        ))
+        self.print_menu(["y: Save File", "n: Discard"])
+
+    def print_menu(self, options):
+        menu_text = "  •  ".join([f"[bold white]{opt}[/bold white]" for opt in options])
+        console.print(Panel(menu_text, style="on grey11", box=box.SIMPLE, justify="center"))
+
+```
+
+### 4. `singularity.py`
+
+**Changes:** Added `mode_factory`. It handles the workflow of reading the source file, asking the agent for tests, previewing the result, and saving it to `tests/test_<name>.py`.
+
+```python
+#!/usr/bin/env python3
+"""
+Singularity CLI - Benchmark Edition + Test Factory
+The main entry point. Orchestrates Agent, Tools, and Reporter.
+"""
+import asyncio
+import argparse
+import sys
+import os
+from pathlib import Path
+
+# Check libraries
+try:
+    from rich.prompt import Prompt, Confirm
+    from rich.console import Console
+except ImportError:
+    print("Installing requirements...")
+    os.system(f"{sys.executable} -m pip install rich httpx")
+    from rich.prompt import Prompt, Confirm
+    from rich.console import Console
+
+from mcp_tools import MCPTools
+from reporter import Reporter
+from agent import Agent
+
+console = Console()
+
+class SingularityCLI:
+    def __init__(self):
+        self.tools = MCPTools()
+        self.reporter = Reporter()
+        self.agent = Agent(self.tools)
+
+    async def mode_suggest(self, query: str):
+        """Mode: Natural Language -> Shell Command"""
+        with console.status("[bold cyan]Thinking...[/bold cyan]", spinner="dots"):
+            command = await self.agent.suggest_command(query)
+            command = command.strip().strip('`').strip()
+
+        self.reporter.render_suggestion(query, command)
+
+        while True:
+            choice = Prompt.ask("", choices=["", "e", "q"], show_choices=False, default="")
+            if choice == "": # Execute
+                console.print(f"[dim]Running: {command}[/dim]")
+                result = self.tools.run_command(command)
+                if result['code'] == 0:
+                    console.print(result['stdout'])
+                    console.print("[bold green]Success[/bold green]")
+                else:
+                    console.print(result['stderr'])
+                    console.print(f"[bold red]Failed (Exit {result['code']})[/bold red]")
+                break
+            elif choice == "e": # Explain
+                with console.status("[dim]Generating explanation...[/dim]"):
+                    explanation = await self.agent.explain_command(command)
+                self.reporter.render_suggestion(query, command, explanation)
+            elif choice == "q":
+                console.print("[dim]Aborted.[/dim]")
+                break
+
+    async def mode_test_analysis(self):
+        """Mode: Intelligent Test Suite Analysis"""
+        console.rule("[bold magenta]Singularity Test Intelligence[/bold magenta]")
+        
+        with console.status("[bold cyan]Running pytest suite...[/bold cyan]", spinner="runner"):
+            result = self.tools.run_pytest_analysis()
+        
+        if result['code'] == 0:
+            console.print(Panel("[bold green]All tests passed![/bold green]", border_style="green"))
+            return
+
+        output = result['stdout'] + "\n" + result['stderr']
+        failed_tests = []
+        lines = output.splitlines()
+        
+        for i, line in enumerate(lines):
+            if line.startswith("FAILED") or line.startswith("ERROR"):
+                parts = line.split()
+                if len(parts) > 1:
+                    test_id = parts[1]
+                    log_snippet = "\n".join(lines[i:min(i+20, len(lines))])
+                    failed_tests.append({"id": test_id, "log": log_snippet})
+
+        console.print(f"[bold red]Found {len(failed_tests)} failures. Starting AI Analysis...[/bold red]\n")
+
+        for test in failed_tests:
+            test_id = test['id']
+            file_path = test_id.split("::")[0]
+            source_code = self.tools.extract_test_source(file_path, test_id)
+            
+            with console.status(f"[bold yellow]Analyzing {test_id}...[/bold yellow]"):
+                analysis = await self.agent.analyze_test_failure(test_id, test['log'], source_code)
+            
+            self.reporter.render_test_card(
+                test_id,
+                analysis.get('intent', 'Unknown'),
+                analysis.get('diagnosis', 'Analysis failed'),
+                analysis.get('fix', 'N/A')
+            )
+
+    async def mode_factory(self, filename: str):
+        """Mode: Generate Unit Tests for a file."""
+        console.rule(f"[bold green]Singularity Test Factory: {filename}[/bold green]")
+        
+        # 1. Read source
+        source_code = self.tools.read_file(filename)
+        if not source_code:
+            console.print(f"[bold red]Error: Could not read {filename}[/bold red]")
+            return
+
+        # 2. Generate
+        target_file = f"tests/test_{Path(filename).name}"
+        console.print(f"[dim]Reading {filename} ({len(source_code)} chars)...[/dim]")
+        
+        with console.status(f"[bold cyan]Drafting tests for {filename}...[/bold cyan]", spinner="earth"):
+            test_code = await self.agent.craft_test_suite(filename, source_code)
+
+        # 3. Preview & Save
+        self.reporter.render_code_preview(target_file, test_code)
+        
+        if Confirm.ask("Save this test file?"):
+            msg = self.tools.save_to_file(target_file, test_code)
+            console.print(f"[bold green]✓ {msg}[/bold green]")
+        else:
+            console.print("[dim]Discarded.[/dim]")
+
+async def main():
+    parser = argparse.ArgumentParser(description="Singularity: AI Code Agent")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Suggest
+    suggest = subparsers.add_parser("suggest", help="Natural language to shell")
+    suggest.add_argument("query", nargs="+", help="What to do?")
+
+    # Test Analysis
+    subparsers.add_parser("test", help="Analyze pytest results")
+
+    # Test Factory
+    factory = subparsers.add_parser("factory", help="Generate tests for a file")
+    factory.add_argument("filename", help="The python file to generate tests for")
+
+    args = parser.parse_args()
+    cli = SingularityCLI()
+
+    try:
+        if args.command == "suggest":
+            await cli.mode_suggest(" ".join(args.query))
+        elif args.command == "test":
+            await cli.mode_test_analysis()
+        elif args.command == "factory":
+            await cli.mode_factory(args.filename)
+        else:
+            parser.print_help()
+    except KeyboardInterrupt:
+        print("\nGoodbye.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+```
+
+------------------

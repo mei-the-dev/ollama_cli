@@ -1,0 +1,9 @@
+..................                                                       [100%]
+=============================== warnings summary ===============================
+tests/test_report_cli.py::test_report_exports_json
+tests/test_report_html_cli.py::test_report_exports_html
+  /run/media/mei/neo/ollama_cli/tests/reporting/__init__.py:86: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    out = {"generated_at": datetime.datetime.utcnow().isoformat() + "Z", "cards": cards}
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+18 passed, 9 skipped, 48 deselected, 2 warnings in 1.86s

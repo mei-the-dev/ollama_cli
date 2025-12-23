@@ -52,21 +52,110 @@ def validate_cards(cards: list) -> list:
     return out
 
 
+import ast
+
+
+def _extract_test_metadata(nodeid: str) -> dict:
+    """Extract metadata for a test node id like 'tests/foo.py::test_bar'.
+
+    Returns: { 'file': str, 'func': str, 'description': str|None, 'line': int|None, 'markers': list[str] }
+    """
+    parts = nodeid.split("::")
+    file_part = parts[0] if parts else nodeid
+    func_part = parts[1] if len(parts) > 1 else None
+    out = {"file": file_part, "func": func_part, "description": None, "line": None, "markers": []}
+
+    try:
+        with open(file_part, "r", encoding="utf-8") as fh:
+            src = fh.read()
+        module = ast.parse(src)
+        # Find the function
+        for node in module.body:
+            if isinstance(node, ast.FunctionDef) and node.name == func_part:
+                out["description"] = ast.get_docstring(node) or None
+                out["line"] = getattr(node, "lineno", None)
+                # Inspect decorators for pytest.mark.*
+                markers = []
+                for dec in node.decorator_list:
+                    if isinstance(dec, ast.Attribute):
+                        # e.g., pytest.mark.slow
+                        try:
+                            if isinstance(dec.value, ast.Attribute) and isinstance(dec.value.value, ast.Name) and dec.value.value.id == "pytest":
+                                markers.append(dec.attr)
+                        except Exception:
+                            pass
+                    elif isinstance(dec, ast.Call):
+                        # e.g., pytest.mark.parametrize(...) or pytest.mark.live
+                        func = dec.func
+                        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Attribute):
+                            # pytest.mark.something
+                            if isinstance(func.value.value, ast.Name) and func.value.value.id == "pytest":
+                                markers.append(func.attr)
+                        elif isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "pytest":
+                            markers.append(func.attr)
+                out["markers"] = markers
+                break
+    except Exception:
+        # best-effort only; don't fail because of metadata extraction
+        pass
+    return out
+
+
 def build_cards_from_events(by_test: Dict[str, List[dict]]) -> List[dict]:
-    """Convert grouped events into a list of cards (test, prompt, answer, parsed_tool)."""
+    """Convert grouped events into a list of cards (test, prompt, answer, parsed_tool), enriched with metadata."""
     cards: List[dict] = []
     for test, evs in by_test.items():
         prompt = ""
         answer = ""
         parsed = None
+        timestamps = {}
         for e in evs:
             if e.get("event") == "PROMPT":
                 prompt = e.get("payload", {}).get("prompt", "")
+                timestamps.setdefault("prompt_ts", e.get("ts"))
             elif e.get("event") == "ASSISTANT":
                 answer = e.get("payload", {}).get("content", "")
+                timestamps.setdefault("assistant_ts", e.get("ts"))
             elif e.get("event") == "PARSED_TOOL":
                 parsed = e.get("payload")
-        cards.append({"test": test, "prompt": prompt or "(no prompt logged)", "answer": answer or "(no model call)", "parsed_tool": parsed})
+                timestamps.setdefault("parsed_ts", e.get("ts"))
+        meta = _extract_test_metadata(test)
+        # Determine intention/result hint
+        intent = "No model interaction expected"
+        if "live" in (test or "") or any("live" == m for m in meta.get("markers", [])):
+            intent = "Live model integration — expected a model-emitted tool call"
+        if answer and answer != "(no model call)":
+            intent = "Model interaction recorded"
+
+        # If there's no prompt recorded, try to extract a code snippet (first few lines of the test function)
+        test_snippet = None
+        try:
+            tf = meta.get("file")
+            ln = meta.get("line")
+            if tf and ln and os.path.exists(tf):
+                with open(tf, "r", encoding="utf-8", errors="ignore") as fh:
+                    lines = fh.read().splitlines()
+                # grab up to 6 lines starting at the function line
+                start = max(ln - 1, 0)
+                snippet = lines[start : start + 6]
+                test_snippet = "\n".join(snippet).strip()
+        except Exception:
+            test_snippet = None
+
+        card = {
+            "test": test,
+            "file": meta.get("file"),
+            "line": meta.get("line"),
+            "markers": meta.get("markers", []),
+            "description": meta.get("description") or "(no test description)",
+            "test_snippet": test_snippet,
+            "prompt": prompt or "(no prompt logged)",
+            "answer": answer or "(no model call)",
+            "parsed_tool": parsed,
+            "intent": intent,
+            "timestamps": timestamps,
+        }
+        cards.append(card)
     # Keep stable ordering by test id
     cards.sort(key=lambda c: c.get("test", ""))
     return cards
@@ -83,7 +172,8 @@ def export_report_json(cards: List[dict], path: str):
     """
     import datetime
 
-    out = {"generated_at": datetime.datetime.utcnow().isoformat() + "Z", "cards": cards}
+    # Use timezone-aware UTC timestamp
+    out = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "cards": cards}
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2)
 

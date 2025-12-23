@@ -1,0 +1,1606 @@
+{
+  "generated_at": "2025-12-23T03:54:32.107807Z",
+  "counts": {
+    "total_tests": 67,
+    "with_docstring": 6,
+    "with_events": 0,
+    "missing_doc": 61,
+    "missing_events": 67,
+    "live_expected_no_call": 3
+  },
+  "inventory": [
+    {
+      "test": "tests/test_ci_enforce_report.py::test_enforce_detects_missing",
+      "file": "tests/test_ci_enforce_report.py",
+      "func": "test_enforce_detects_missing",
+      "line": 15,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_ci_enforce_report.py::test_enforce_all_good",
+      "file": "tests/test_ci_enforce_report.py",
+      "func": "test_enforce_all_good",
+      "line": 22,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_cli_banner_and_prompts.py::test_show_banner_runs",
+      "file": "tests/test_cli_banner_and_prompts.py",
+      "func": "test_show_banner_runs",
+      "line": 10,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_cli_banner_and_prompts.py::test_startup_prompts_noninteractive_skips",
+      "file": "tests/test_cli_banner_and_prompts.py",
+      "func": "test_startup_prompts_noninteractive_skips",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_cli_banner_and_prompts.py::test_execute_command_async",
+      "file": "tests/test_cli_banner_and_prompts.py",
+      "func": "test_execute_command_async",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_cli_dashboard.py::test_start_dashboard_with_tmux",
+      "file": "tests/test_cli_dashboard.py",
+      "func": "test_start_dashboard_with_tmux",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_cli_dashboard.py::test_start_dashboard_without_tmux",
+      "file": "tests/test_cli_dashboard.py",
+      "func": "test_start_dashboard_without_tmux",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_cli_dashboard.py::test_help_includes_dashboard",
+      "file": "tests/test_cli_dashboard.py",
+      "func": "test_help_includes_dashboard",
+      "line": 70,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_cli_dashboard.py::test_auto_launch_gui_terminal",
+      "file": "tests/test_cli_dashboard.py",
+      "func": "test_auto_launch_gui_terminal",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_cli_dashboard.py::test_preferred_terminal_env",
+      "file": "tests/test_cli_dashboard.py",
+      "func": "test_preferred_terminal_env",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_cli_interactive_code_mode.py::test_interactive_code_mode_prints_code_and_no_placeholder",
+      "file": "tests/test_cli_interactive_code_mode.py",
+      "func": "test_interactive_code_mode_prints_code_and_no_placeholder",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_with_animation",
+          "PROMPT",
+          "ASSISTANT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_cli_startup_and_batch.py::test_cli_startup_and_batch_file_ops",
+      "file": "tests/test_cli_startup_and_batch.py",
+      "func": "test_cli_startup_and_batch_file_ops",
+      "line": 10,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_config_show.py::test_get_effective_config",
+      "file": "tests/test_config_show.py",
+      "func": "test_get_effective_config",
+      "line": 9,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_config_show.py::test_cli_config_show_exec",
+      "file": "tests/test_config_show.py",
+      "func": "test_cli_config_show_exec",
+      "line": 26,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_dashboard_exists.py::test_dashboard_file_exists",
+      "file": "tests/test_dashboard_exists.py",
+      "func": "test_dashboard_file_exists",
+      "line": 4,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_dashboard_exists.py::test_dashboard_executable_flag",
+      "file": "tests/test_dashboard_exists.py",
+      "func": "test_dashboard_executable_flag",
+      "line": 12,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_docs_exist.py::test_docs_exist",
+      "file": "tests/test_docs_exist.py",
+      "func": "test_docs_exist",
+      "line": 4,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_event_reader.py::test_read_and_find",
+      "file": "tests/test_event_reader.py",
+      "func": "test_read_and_find",
+      "line": 7,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT",
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_event_schema.py::test_event_schema_and_validation",
+      "file": "tests/test_event_schema.py",
+      "func": "test_event_schema_and_validation",
+      "line": 7,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_export_html.py::test_export_html",
+      "file": "tests/test_export_html.py",
+      "func": "test_export_html",
+      "line": 7,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_integration_live_model.py::test_live_model_emits_tool_and_mcp_exec",
+      "file": "tests/test_integration_live_model.py",
+      "func": "test_live_model_emits_tool_and_mcp_exec",
+      "line": 18,
+      "markers": [
+        "skipif"
+      ],
+      "docstring": "Integration test: require Ollama running locally. It should emit a JSON tool call which we execute via MCP.\n\n- Starts the production MCP server from ref/v2/production_mcp_server.py (random port)\n- Ensures Ollama is reachable (fails if not)\n- Sends a prompt that instructs the model to output *only* a JSON tool call: {\"tool\": \"write_code\", \"args\": {...}}\n- process_with_tools should detect and execute the tool via MCP and return a success summary\n- The test verifies the file exists with the expected content",
+      "doc_present": true,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 2,
+      "intent": "Live model integration \u2014 expected a model-emitted tool call",
+      "investigation": {
+        "mentions": [
+          "event_reader",
+          "SingularityAgent",
+          "ASSISTANT",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_integration_live_strict.py::test_live_strict_write_code",
+      "file": "tests/test_integration_live_strict.py",
+      "func": "test_live_strict_write_code",
+      "line": 70,
+      "markers": [
+        "skipif"
+      ],
+      "docstring": "Strict end-to-end test (no mocking): model must emit a single JSON object (or fenced json) and nothing else.\n\n- Uses a production MCP server subprocess\n- Uses a real local Ollama model (chosen from /api/tags)\n- Verifies assistant output contains only JSON (or fenced JSON) and that the write succeeds",
+      "doc_present": true,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 2,
+      "intent": "Live model integration \u2014 expected a model-emitted tool call",
+      "investigation": {
+        "mentions": [
+          "event_reader",
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_integration_live_strict.py::test_live_fragmented_json_streaming",
+      "file": "tests/test_integration_live_strict.py",
+      "func": "test_live_fragmented_json_streaming",
+      "line": 168,
+      "markers": [
+        "skipif"
+      ],
+      "docstring": "Ask the model to emit the JSON tool call fragmented across many small chunks and ensure the streamer reassembles it correctly.",
+      "doc_present": true,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 2,
+      "intent": "Live model integration \u2014 expected a model-emitted tool call",
+      "investigation": {
+        "mentions": [
+          "event_reader",
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_launch_script_exists.py::test_launch_script_exists",
+      "file": "tests/test_launch_script_exists.py",
+      "func": "test_launch_script_exists",
+      "line": 4,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_launch_script_exists.py::test_launch_script_executable",
+      "file": "tests/test_launch_script_exists.py",
+      "func": "test_launch_script_executable",
+      "line": 13,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_mcp_client.py::test_call_mcp_tool_success",
+      "file": "tests/test_mcp_client.py",
+      "func": "test_call_mcp_tool_success",
+      "line": 32,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_client.py::test_call_mcp_tool_retries_on_5xx_then_success",
+      "file": "tests/test_mcp_client.py",
+      "func": "test_call_mcp_tool_retries_on_5xx_then_success",
+      "line": 64,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_client.py::test_call_mcp_tool_timeout",
+      "file": "tests/test_mcp_client.py",
+      "func": "test_call_mcp_tool_timeout",
+      "line": 88,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_runner.py::test_mcp_server_starts_and_reports_port",
+      "file": "tests/test_mcp_runner.py",
+      "func": "test_mcp_server_starts_and_reports_port",
+      "line": 8,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_mcp_server_start.py::test_parse_listen_line_variants",
+      "file": "tests/test_mcp_server_start.py",
+      "func": "test_parse_listen_line_variants",
+      "line": 49,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_server_start.py::test_start_mcp_server_success",
+      "file": "tests/test_mcp_server_start.py",
+      "func": "test_start_mcp_server_success",
+      "line": 61,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_server_start.py::test_start_mcp_server_timeout",
+      "file": "tests/test_mcp_server_start.py",
+      "func": "test_start_mcp_server_timeout",
+      "line": 83,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_server_start.py::test_parse_listen_line_hostname_and_ipv6",
+      "file": "tests/test_mcp_server_start.py",
+      "func": "test_parse_listen_line_hostname_and_ipv6",
+      "line": 100,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_write_and_apply_edit",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_write_and_apply_edit",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_generate_tests_and_run",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_generate_tests_and_run",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_create_project_and_venv",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_create_project_and_venv",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_search_files",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_search_files",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_save_and_load_session",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_save_and_load_session",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_execute_streaming",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_execute_streaming",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_refactor_rename",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_refactor_rename",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_cli_starts_mcp_server",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_cli_starts_mcp_server",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools.py::test_cli_tool",
+      "file": "tests/test_mcp_tools.py",
+      "func": "test_cli_tool",
+      "line": 188,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "SingularityAgent",
+          "execute_streaming",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_write_and_read_code",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_write_and_read_code",
+      "line": 25,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_apply_edit",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_apply_edit",
+      "line": 43,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_search_files",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_search_files",
+      "line": 78,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_generate_and_run_tests",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_generate_and_run_tests",
+      "line": 88,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_refactor_code_rename",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_refactor_code_rename",
+      "line": 111,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_create_and_update_plan",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_create_and_update_plan",
+      "line": 145,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_save_and_query_knowledge",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_save_and_query_knowledge",
+      "line": 160,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_manage_context",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_manage_context",
+      "line": 174,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_execute_code_echo",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_execute_code_echo",
+      "line": 186,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_mcp_tools_all.py::test_http_call_endpoint",
+      "file": "tests/test_mcp_tools_all.py",
+      "func": "test_http_call_endpoint",
+      "line": 206,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_model_events_plugin.py::test_model_event_fixture_writes_jsonl",
+      "file": "tests/test_model_events_plugin.py",
+      "func": "test_model_event_fixture_writes_jsonl",
+      "line": 5,
+      "markers": [],
+      "docstring": "Ensure the fixture writes events to the configured JSONL path.",
+      "doc_present": true,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "model_event_logger",
+          "PROMPT",
+          "ASSISTANT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_no_active_omarchy_tokens.py::test_no_active_omarchy_tokens_in_code_files",
+      "file": "tests/test_no_active_omarchy_tokens.py",
+      "func": "test_no_active_omarchy_tokens_in_code_files",
+      "line": 16,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_no_placeholder_responses.py::test_no_placeholders_in_singularity_log",
+      "file": "tests/test_no_placeholder_responses.py",
+      "func": "test_no_placeholders_in_singularity_log",
+      "line": 19,
+      "markers": [],
+      "docstring": "Fail if known placeholder text appears in `logs/singularity.log`.",
+      "doc_present": true,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_no_placeholder_responses.py::test_no_placeholders_in_event_jsonl",
+      "file": "tests/test_no_placeholder_responses.py",
+      "func": "test_no_placeholders_in_event_jsonl",
+      "line": 25,
+      "markers": [],
+      "docstring": "Fail if known placeholder text appears in `TEST_MODEL_EVENTS_PATH` JSONL.",
+      "doc_present": true,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_ollama_streaming.py::test_generate_streaming_basic",
+      "file": "tests/test_ollama_streaming.py",
+      "func": "test_generate_streaming_basic",
+      "line": 29,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "model_event_logger",
+          "SingularityAgent",
+          "generate_streaming",
+          "PROMPT",
+          "ASSISTANT",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_report_cli.py::test_report_exports_json",
+      "file": "tests/test_report_cli.py",
+      "func": "test_report_exports_json",
+      "line": 8,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT",
+          "ASSISTANT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_report_html_cli.py::test_report_exports_html",
+      "file": "tests/test_report_html_cli.py",
+      "func": "test_report_exports_html",
+      "line": 9,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT",
+          "ASSISTANT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_reporting.py::test_reporting_parse_and_build",
+      "file": "tests/test_reporting.py",
+      "func": "test_reporting_parse_and_build",
+      "line": 7,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT",
+          "ASSISTANT",
+          "PARSED_TOOL"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_reporting_enrichment.py::test_build_cards_includes_test_docstring_and_markers",
+      "file": "tests/test_reporting_enrichment.py",
+      "func": "test_build_cards_includes_test_docstring_and_markers",
+      "line": 7,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT",
+          "ASSISTANT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_reporting_models.py::test_event_validation_and_cards",
+      "file": "tests/test_reporting_models.py",
+      "func": "test_event_validation_and_cards",
+      "line": 4,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "PROMPT"
+        ]
+      }
+    },
+    {
+      "test": "tests/test_singularity_events.py::test_events_emitted",
+      "file": "tests/test_singularity_events.py",
+      "func": "test_events_emitted",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "model_event_logger",
+          "SingularityAgent",
+          "generate_streaming",
+          "PROMPT",
+          "ASSISTANT",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_startup_prompts.py::test_startup_prompts_enable_auto_and_sudo",
+      "file": "tests/test_startup_prompts.py",
+      "func": "test_startup_prompts_enable_auto_and_sudo",
+      "line": 6,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": []
+      }
+    },
+    {
+      "test": "tests/test_tool_calls.py::test_extract_json_object_various",
+      "file": "tests/test_tool_calls.py",
+      "func": "test_extract_json_object_various",
+      "line": 14,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "model_event_logger",
+          "SingularityAgent",
+          "generate_streaming",
+          "PROMPT",
+          "ASSISTANT",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_tool_calls.py::test_process_with_tools_calls_mcp",
+      "file": "tests/test_tool_calls.py",
+      "func": "test_process_with_tools_calls_mcp",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "model_event_logger",
+          "SingularityAgent",
+          "generate_streaming",
+          "PROMPT",
+          "ASSISTANT",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    },
+    {
+      "test": "tests/test_tool_calls.py::test_process_with_tools_normalizes_file_path",
+      "file": "tests/test_tool_calls.py",
+      "func": "test_process_with_tools_normalizes_file_path",
+      "line": null,
+      "markers": [],
+      "docstring": null,
+      "doc_present": false,
+      "prompt_count": 0,
+      "assistant_count": 0,
+      "parsed_tool_count": 0,
+      "sample_prompt": null,
+      "sample_answer": null,
+      "log_hits": 0,
+      "intent": "No model interaction expected",
+      "investigation": {
+        "mentions": [
+          "model_event_logger",
+          "SingularityAgent",
+          "generate_streaming",
+          "PROMPT",
+          "ASSISTANT",
+          "PARSED_TOOL",
+          "agent ="
+        ]
+      }
+    }
+  ],
+  "missing_doc": [
+    "tests/test_ci_enforce_report.py::test_enforce_detects_missing",
+    "tests/test_ci_enforce_report.py::test_enforce_all_good",
+    "tests/test_cli_banner_and_prompts.py::test_show_banner_runs",
+    "tests/test_cli_banner_and_prompts.py::test_startup_prompts_noninteractive_skips",
+    "tests/test_cli_banner_and_prompts.py::test_execute_command_async",
+    "tests/test_cli_dashboard.py::test_start_dashboard_with_tmux",
+    "tests/test_cli_dashboard.py::test_start_dashboard_without_tmux",
+    "tests/test_cli_dashboard.py::test_help_includes_dashboard",
+    "tests/test_cli_dashboard.py::test_auto_launch_gui_terminal",
+    "tests/test_cli_dashboard.py::test_preferred_terminal_env",
+    "tests/test_cli_interactive_code_mode.py::test_interactive_code_mode_prints_code_and_no_placeholder",
+    "tests/test_cli_startup_and_batch.py::test_cli_startup_and_batch_file_ops",
+    "tests/test_config_show.py::test_get_effective_config",
+    "tests/test_config_show.py::test_cli_config_show_exec",
+    "tests/test_dashboard_exists.py::test_dashboard_file_exists",
+    "tests/test_dashboard_exists.py::test_dashboard_executable_flag",
+    "tests/test_docs_exist.py::test_docs_exist",
+    "tests/test_event_reader.py::test_read_and_find",
+    "tests/test_event_schema.py::test_event_schema_and_validation",
+    "tests/test_export_html.py::test_export_html",
+    "tests/test_launch_script_exists.py::test_launch_script_exists",
+    "tests/test_launch_script_exists.py::test_launch_script_executable",
+    "tests/test_mcp_client.py::test_call_mcp_tool_success",
+    "tests/test_mcp_client.py::test_call_mcp_tool_retries_on_5xx_then_success",
+    "tests/test_mcp_client.py::test_call_mcp_tool_timeout",
+    "tests/test_mcp_runner.py::test_mcp_server_starts_and_reports_port",
+    "tests/test_mcp_server_start.py::test_parse_listen_line_variants",
+    "tests/test_mcp_server_start.py::test_start_mcp_server_success",
+    "tests/test_mcp_server_start.py::test_start_mcp_server_timeout",
+    "tests/test_mcp_server_start.py::test_parse_listen_line_hostname_and_ipv6",
+    "tests/test_mcp_tools.py::test_write_and_apply_edit",
+    "tests/test_mcp_tools.py::test_generate_tests_and_run",
+    "tests/test_mcp_tools.py::test_create_project_and_venv",
+    "tests/test_mcp_tools.py::test_search_files",
+    "tests/test_mcp_tools.py::test_save_and_load_session",
+    "tests/test_mcp_tools.py::test_execute_streaming",
+    "tests/test_mcp_tools.py::test_refactor_rename",
+    "tests/test_mcp_tools.py::test_cli_starts_mcp_server",
+    "tests/test_mcp_tools.py::test_cli_tool",
+    "tests/test_mcp_tools_all.py::test_write_and_read_code",
+    "tests/test_mcp_tools_all.py::test_apply_edit",
+    "tests/test_mcp_tools_all.py::test_search_files",
+    "tests/test_mcp_tools_all.py::test_generate_and_run_tests",
+    "tests/test_mcp_tools_all.py::test_refactor_code_rename",
+    "tests/test_mcp_tools_all.py::test_create_and_update_plan",
+    "tests/test_mcp_tools_all.py::test_save_and_query_knowledge",
+    "tests/test_mcp_tools_all.py::test_manage_context",
+    "tests/test_mcp_tools_all.py::test_execute_code_echo",
+    "tests/test_mcp_tools_all.py::test_http_call_endpoint",
+    "tests/test_no_active_omarchy_tokens.py::test_no_active_omarchy_tokens_in_code_files",
+    "tests/test_ollama_streaming.py::test_generate_streaming_basic",
+    "tests/test_report_cli.py::test_report_exports_json",
+    "tests/test_report_html_cli.py::test_report_exports_html",
+    "tests/test_reporting.py::test_reporting_parse_and_build",
+    "tests/test_reporting_enrichment.py::test_build_cards_includes_test_docstring_and_markers",
+    "tests/test_reporting_models.py::test_event_validation_and_cards",
+    "tests/test_singularity_events.py::test_events_emitted",
+    "tests/test_startup_prompts.py::test_startup_prompts_enable_auto_and_sudo",
+    "tests/test_tool_calls.py::test_extract_json_object_various",
+    "tests/test_tool_calls.py::test_process_with_tools_calls_mcp",
+    "tests/test_tool_calls.py::test_process_with_tools_normalizes_file_path"
+  ],
+  "missing_events": [
+    "tests/test_ci_enforce_report.py::test_enforce_detects_missing",
+    "tests/test_ci_enforce_report.py::test_enforce_all_good",
+    "tests/test_cli_banner_and_prompts.py::test_show_banner_runs",
+    "tests/test_cli_banner_and_prompts.py::test_startup_prompts_noninteractive_skips",
+    "tests/test_cli_banner_and_prompts.py::test_execute_command_async",
+    "tests/test_cli_dashboard.py::test_start_dashboard_with_tmux",
+    "tests/test_cli_dashboard.py::test_start_dashboard_without_tmux",
+    "tests/test_cli_dashboard.py::test_help_includes_dashboard",
+    "tests/test_cli_dashboard.py::test_auto_launch_gui_terminal",
+    "tests/test_cli_dashboard.py::test_preferred_terminal_env",
+    "tests/test_cli_interactive_code_mode.py::test_interactive_code_mode_prints_code_and_no_placeholder",
+    "tests/test_cli_startup_and_batch.py::test_cli_startup_and_batch_file_ops",
+    "tests/test_config_show.py::test_get_effective_config",
+    "tests/test_config_show.py::test_cli_config_show_exec",
+    "tests/test_dashboard_exists.py::test_dashboard_file_exists",
+    "tests/test_dashboard_exists.py::test_dashboard_executable_flag",
+    "tests/test_docs_exist.py::test_docs_exist",
+    "tests/test_event_reader.py::test_read_and_find",
+    "tests/test_event_schema.py::test_event_schema_and_validation",
+    "tests/test_export_html.py::test_export_html",
+    "tests/test_integration_live_model.py::test_live_model_emits_tool_and_mcp_exec",
+    "tests/test_integration_live_strict.py::test_live_strict_write_code",
+    "tests/test_integration_live_strict.py::test_live_fragmented_json_streaming",
+    "tests/test_launch_script_exists.py::test_launch_script_exists",
+    "tests/test_launch_script_exists.py::test_launch_script_executable",
+    "tests/test_mcp_client.py::test_call_mcp_tool_success",
+    "tests/test_mcp_client.py::test_call_mcp_tool_retries_on_5xx_then_success",
+    "tests/test_mcp_client.py::test_call_mcp_tool_timeout",
+    "tests/test_mcp_runner.py::test_mcp_server_starts_and_reports_port",
+    "tests/test_mcp_server_start.py::test_parse_listen_line_variants",
+    "tests/test_mcp_server_start.py::test_start_mcp_server_success",
+    "tests/test_mcp_server_start.py::test_start_mcp_server_timeout",
+    "tests/test_mcp_server_start.py::test_parse_listen_line_hostname_and_ipv6",
+    "tests/test_mcp_tools.py::test_write_and_apply_edit",
+    "tests/test_mcp_tools.py::test_generate_tests_and_run",
+    "tests/test_mcp_tools.py::test_create_project_and_venv",
+    "tests/test_mcp_tools.py::test_search_files",
+    "tests/test_mcp_tools.py::test_save_and_load_session",
+    "tests/test_mcp_tools.py::test_execute_streaming",
+    "tests/test_mcp_tools.py::test_refactor_rename",
+    "tests/test_mcp_tools.py::test_cli_starts_mcp_server",
+    "tests/test_mcp_tools.py::test_cli_tool",
+    "tests/test_mcp_tools_all.py::test_write_and_read_code",
+    "tests/test_mcp_tools_all.py::test_apply_edit",
+    "tests/test_mcp_tools_all.py::test_search_files",
+    "tests/test_mcp_tools_all.py::test_generate_and_run_tests",
+    "tests/test_mcp_tools_all.py::test_refactor_code_rename",
+    "tests/test_mcp_tools_all.py::test_create_and_update_plan",
+    "tests/test_mcp_tools_all.py::test_save_and_query_knowledge",
+    "tests/test_mcp_tools_all.py::test_manage_context",
+    "tests/test_mcp_tools_all.py::test_execute_code_echo",
+    "tests/test_mcp_tools_all.py::test_http_call_endpoint",
+    "tests/test_model_events_plugin.py::test_model_event_fixture_writes_jsonl",
+    "tests/test_no_active_omarchy_tokens.py::test_no_active_omarchy_tokens_in_code_files",
+    "tests/test_no_placeholder_responses.py::test_no_placeholders_in_singularity_log",
+    "tests/test_no_placeholder_responses.py::test_no_placeholders_in_event_jsonl",
+    "tests/test_ollama_streaming.py::test_generate_streaming_basic",
+    "tests/test_report_cli.py::test_report_exports_json",
+    "tests/test_report_html_cli.py::test_report_exports_html",
+    "tests/test_reporting.py::test_reporting_parse_and_build",
+    "tests/test_reporting_enrichment.py::test_build_cards_includes_test_docstring_and_markers",
+    "tests/test_reporting_models.py::test_event_validation_and_cards",
+    "tests/test_singularity_events.py::test_events_emitted",
+    "tests/test_startup_prompts.py::test_startup_prompts_enable_auto_and_sudo",
+    "tests/test_tool_calls.py::test_extract_json_object_various",
+    "tests/test_tool_calls.py::test_process_with_tools_calls_mcp",
+    "tests/test_tool_calls.py::test_process_with_tools_normalizes_file_path"
+  ],
+  "live_expected_no_call": [
+    "tests/test_integration_live_model.py::test_live_model_emits_tool_and_mcp_exec",
+    "tests/test_integration_live_strict.py::test_live_strict_write_code",
+    "tests/test_integration_live_strict.py::test_live_fragmented_json_streaming"
+  ],
+  "events_path": "/run/media/mei/neo/ollama_cli/logs/test_model_events.jsonl",
+  "log_path": "/run/media/mei/neo/ollama_cli/logs/singularity.log"
+}

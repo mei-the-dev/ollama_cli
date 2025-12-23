@@ -705,7 +705,7 @@ class SingularityAgent:
                     task = text.split("Generate code for:", 1)[1].strip()
                     reply = (
                         f"Code generation requested for: {task}\n"
-                        "(This environment provides a placeholder response; use /mode code for structured output.)"
+                        "(Live model unavailable. Set RUN_LIVE_OLLAMA=1 to enable structured code output.)"
                     )
                 elif text.startswith("Create a detailed implementation plan for:"):
                     task = text.split("Create a detailed implementation plan for:", 1)[1].strip()

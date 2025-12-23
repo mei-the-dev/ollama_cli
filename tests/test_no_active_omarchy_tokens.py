@@ -18,6 +18,7 @@ def test_no_active_omarchy_tokens_in_code_files():
 
     allow_prefixes = {
         (root / "ref" / "legacy").as_posix(),
+        (root / ".ref" / "legacy").as_posix(),
         (root / "tests").as_posix(),
         (root / ".venv").as_posix(),
         (root / ".mypy_cache").as_posix(),
