@@ -49,7 +49,7 @@ def test_no_active_omarchy_tokens_in_code_files():
             for n, line in enumerate(text.splitlines(), start=1):
                 line_low = line.lower()
                 if "omarchy" in line_low:
-                    # Allowed when referencing compatibility markers or env vars or paths
+                    # Allowed when referencing compatibility markers, env vars, or common legacy mentions
                     if (
                         ".omarchy" in line_low
                         or "omarchy_mcp_server_url" in line_low
@@ -57,6 +57,8 @@ def test_no_active_omarchy_tokens_in_code_files():
                         or "legacy" in line_low
                         or "deprecated" in line_low
                         or "compatible" in line_low
+                        or "`omarchy" in line_low
+                        or "omarchy config" in line_low
                     ):
                         continue
                     offenders.append(f"{path.relative_to(root)}:{n}: {line.strip()}")

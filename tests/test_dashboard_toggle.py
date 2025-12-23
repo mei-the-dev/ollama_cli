@@ -1,5 +1,7 @@
 import pytest
+
 from ref.singularity_dashboard import SingularityDashboard
+
 
 @pytest.mark.asyncio
 async def test_toggle_log_state():
@@ -7,7 +9,7 @@ async def test_toggle_log_state():
     app.register_modules()
     app.mount_modules()
     # initial state should be not collapsed
-    assert not getattr(app, 'log_collapsed', False)
+    assert not getattr(app, "log_collapsed", False)
     app.toggle_log()
     assert app.log_collapsed is True
     app.toggle_log()

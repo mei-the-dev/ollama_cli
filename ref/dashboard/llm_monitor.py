@@ -1,6 +1,7 @@
 import aiohttp
-from textual.widgets import Static
 from textual import work
+from textual.widgets import Static
+
 from .monitor_base import BaseModule
 
 
@@ -37,12 +38,17 @@ class LLMMonitor(BaseModule):
     async def do_check(self):
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:11434/api/tags", timeout=1) as r:
+                async with session.get(
+                    "http://localhost:11434/api/tags", timeout=1
+                ) as r:
                     is_up = r.status == 200
                     self.widget.set_status(is_up)
                     try:
                         if self.app:
-                            self.app.set_kpi('#kpi-ollama', f"Ollama: {'ONLINE' if is_up else 'OFFLINE'}\nPort: 11434")
+                            self.app.set_kpi(
+                                "#kpi-ollama",
+                                f"Ollama: {'ONLINE' if is_up else 'OFFLINE'}\nPort: 11434",
+                            )
                     except Exception:
                         pass
                     try:

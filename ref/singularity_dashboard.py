@@ -7,27 +7,18 @@ Save this file in the repo (e.g. `ref/singularity_dashboard.py`) or copy to `~/.
 """
 import json
 import os
-from datetime import datetime
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 
 import aiohttp
 import psutil
-
-from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, Grid
-from textual.widgets import (
-    Header,
-    Footer,
-    Static,
-    Button,
-    Label,
-    Log,
-    Input,
-    Tree,
-)
-from textual.reactive import reactive
 from textual import work
+from textual.app import App, ComposeResult
+from textual.containers import Container, Grid, Horizontal, Vertical
+from textual.reactive import reactive
+from textual.widgets import (Button, Footer, Header, Input, Label, Log, Static,
+                             Tree)
 
 # --- VISUAL STYLING ---
 CSS = """
@@ -95,6 +86,7 @@ Screen {
 
 class ServiceStatus(Static):
     """Component to show UP/DOWN status of a service."""
+
     status = reactive("CHECKING")
 
     def __init__(self, service_name, port, **kwargs):
@@ -134,7 +126,7 @@ class ResourceGraph(Static):
     def update_data(self, usage):
         self.values.append(usage)
         # simple ascii graph using block characters
-        last = ''.join('▇' if v > 25 else '▂' if v > 5 else ' ' for v in self.values)
+        last = "".join("▇" if v > 25 else "▂" if v > 5 else " " for v in self.values)
         self.query_one("#spark").update(last)
         self.query_one("#val-lbl").update(f"{usage:.1f}%")
 
@@ -157,7 +149,6 @@ class SingularityDashboard(App):
             yield Static("MCP: --\nPort: --", id="kpi-mcp", classes="card")
             yield Static("Req/s: --", id="kpi-reqs", classes="card")
             yield Static("Latency: --", id="kpi-lat", classes="card")
-
 
         with Container(classes="main-content"):
             # Header with toggle
@@ -184,24 +175,24 @@ class SingularityDashboard(App):
         """Create module instances and store them in self.modules (no mounting yet).
         Honor enabled_modules setting from ~/.singularity/config.json or SINGULARITY_PREFERRED_MODULES env var.
         """
-        from ref.dashboard.mcp_monitor import MCPMonitor
+        from ref.dashboard.gpu_widget import GPUMetrics
+        from ref.dashboard.latency_graph import LatencyGraph
         from ref.dashboard.llm_monitor import LLMMonitor
-        from ref.dashboard.mcp_metrics import MCPMetrics
         from ref.dashboard.llm_telemetry import LLMTelemetry
         from ref.dashboard.log_tail import LogTail
+        from ref.dashboard.mcp_metrics import MCPMetrics
+        from ref.dashboard.mcp_monitor import MCPMonitor
         from ref.dashboard.request_rate import RequestRate
-        from ref.dashboard.latency_graph import LatencyGraph
-        from ref.dashboard.gpu_widget import GPUMetrics
 
         candidates = [
-            ('mcp', MCPMonitor()),
-            ('llm', LLMMonitor()),
-            ('mcp_metrics', MCPMetrics()),
-            ('llm_telemetry', LLMTelemetry()),
-            ('req_rate', RequestRate()),
-            ('latency', LatencyGraph()),
-            ('gpu', GPUMetrics()),
-            ('log_tail', LogTail()),
+            ("mcp", MCPMonitor()),
+            ("llm", LLMMonitor()),
+            ("mcp_metrics", MCPMetrics()),
+            ("llm_telemetry", LLMTelemetry()),
+            ("req_rate", RequestRate()),
+            ("latency", LatencyGraph()),
+            ("gpu", GPUMetrics()),
+            ("log_tail", LogTail()),
         ]
 
         enabled = self._read_enabled_modules()
@@ -218,19 +209,19 @@ class SingularityDashboard(App):
 
     def _config_path(self):
         # Prefer new dot folder; fallback logic can be added if needed
-        return Path.home() / '.singularity' / 'config.json'
+        return Path.home() / ".singularity" / "config.json"
 
     def _read_enabled_modules(self):
         # Check env var first
-        env = os.environ.get('SINGULARITY_PREFERRED_MODULES')
+        env = os.environ.get("SINGULARITY_PREFERRED_MODULES")
         if env:
-            return [m.strip() for m in env.split(',') if m.strip()]
+            return [m.strip() for m in env.split(",") if m.strip()]
         cfgp = self._config_path()
         if not cfgp.exists():
             return None
         try:
             j = json.loads(cfgp.read_text())
-            return j.get('enabled_modules')
+            return j.get("enabled_modules")
         except Exception:
             return None
 
@@ -241,27 +232,27 @@ class SingularityDashboard(App):
             cfg = json.loads(cfgp.read_text()) if cfgp.exists() else {}
         except Exception:
             cfg = {}
-        cfg['enabled_modules'] = modules_list
+        cfg["enabled_modules"] = modules_list
         cfgp.write_text(json.dumps(cfg, indent=2))
-
 
     def mount_modules(self):
         """Attempt to mount modules' widgets into the UI; always add widget references to _widget_registry so tests can inspect them.
         Also create fallback KPI placeholders in `_kpi_map` so modules can update KPIs even when the Textual DOM is not active (headless tests).
-        Only mount modules which are enabled per config; disabled modules will be skipped and recorded."""
+        Only mount modules which are enabled per config; disabled modules will be skipped and recorded.
+        """
         self._widget_registry = []
         self._kpi_map = {}
         self._disabled_modules = []
         # try to locate existing KPI static slots - if not present, create placeholders
-        for kid in ('#kpi-ollama', '#kpi-mcp', '#kpi-reqs', '#kpi-lat'):
+        for kid in ("#kpi-ollama", "#kpi-mcp", "#kpi-reqs", "#kpi-lat"):
             try:
                 self.query_one(kid)
                 self._kpi_map[kid] = None  # presence confirmed
             except Exception:
-                self._kpi_map[kid] = ''  # placeholder text
+                self._kpi_map[kid] = ""  # placeholder text
 
         for m in self.modules:
-            if getattr(m, '_enabled', True) is False:
+            if getattr(m, "_enabled", True) is False:
                 if m._module_name not in self._disabled_modules:
                     self._disabled_modules.append(m._module_name)
                 continue
@@ -271,7 +262,7 @@ class SingularityDashboard(App):
             except Exception:
                 m._mounted = False
             # record widget reference for tests even if mount deferred
-            if hasattr(m, 'widget'):
+            if hasattr(m, "widget"):
                 if m.widget not in self._widget_registry:
                     self._widget_registry.append(m.widget)
 
@@ -293,7 +284,7 @@ class SingularityDashboard(App):
         self._write_enabled_modules(list(enabled))
         # find module and enable
         for m in self.modules:
-            if getattr(m, '_module_name', None) == name:
+            if getattr(m, "_module_name", None) == name:
                 m._enabled = True
                 try:
                     m.mount(self)
@@ -304,7 +295,7 @@ class SingularityDashboard(App):
                     self.call_later(lambda m=m: self.start_module(m))
                 except Exception:
                     pass
-                if hasattr(m, 'widget'):
+                if hasattr(m, "widget"):
                     self._widget_registry.append(m.widget)
 
     def disable_module(self, name: str):
@@ -314,17 +305,21 @@ class SingularityDashboard(App):
             enabled.remove(name)
         self._write_enabled_modules(list(enabled))
         for m in self.modules:
-            if getattr(m, '_module_name', None) == name:
+            if getattr(m, "_module_name", None) == name:
                 m._enabled = False
                 if name not in self._disabled_modules:
                     self._disabled_modules.append(name)
                 try:
-                    if getattr(m, 'stop', None):
+                    if getattr(m, "stop", None):
                         self.call_later(lambda m=m: self.run_module_stop(m))
                 except Exception:
                     pass
                 # remove widget from registry
-                if hasattr(m, 'widget') and hasattr(self, '_widget_registry') and m.widget in self._widget_registry:
+                if (
+                    hasattr(m, "widget")
+                    and hasattr(self, "_widget_registry")
+                    and m.widget in self._widget_registry
+                ):
                     try:
                         self._widget_registry.remove(m.widget)
                     except Exception:
@@ -349,6 +344,7 @@ class SingularityDashboard(App):
         except Exception:
             pass
         return None
+
     log_collapsed = reactive(False)
 
     def on_mount(self):
@@ -379,11 +375,11 @@ class SingularityDashboard(App):
 
     def toggle_log(self):
         """Toggle the visibility of the server log panel."""
-        self.log_collapsed = not getattr(self, 'log_collapsed', False)
+        self.log_collapsed = not getattr(self, "log_collapsed", False)
         try:
             # If running Textual, toggle the log's container visibility
-            panel = self.query_one('#log-panel')
-            log = self.query_one('#sys-log')
+            panel = self.query_one("#log-panel")
+            log = self.query_one("#sys-log")
             if self.log_collapsed:
                 log.display = False
                 try:
@@ -408,7 +404,7 @@ class SingularityDashboard(App):
         # Update KPI slots by reading module widgets where available
         try:
             # Update Ollama/MCP and telemetry KPIs
-            for w in getattr(self, '_widget_registry', []):
+            for w in getattr(self, "_widget_registry", []):
                 # match by class name or id heuristics
                 # For now, rely on module widgets updating log and status; leave placeholders
                 pass
@@ -441,9 +437,13 @@ class SingularityDashboard(App):
         # Check Ollama
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get("http://localhost:11434/api/tags", timeout=1) as r:
+                async with session.get(
+                    "http://localhost:11434/api/tags", timeout=1
+                ) as r:
                     is_up = r.status == 200
-                    self.query_one("#stat-ollama").status = "ONLINE" if is_up else "OFFLINE"
+                    self.query_one("#stat-ollama").status = (
+                        "ONLINE" if is_up else "OFFLINE"
+                    )
                     if is_up and not self.ollama_online:
                         self.log_msg("Ollama connected.")
                     self.ollama_online = is_up
@@ -455,9 +455,13 @@ class SingularityDashboard(App):
         try:
             async with aiohttp.ClientSession() as session:
                 payload = {"method": "tools/list", "params": {}}
-                async with session.post("http://localhost:8080/mcp", json=payload, timeout=1) as r:
+                async with session.post(
+                    "http://localhost:8080/mcp", json=payload, timeout=1
+                ) as r:
                     is_up = r.status == 200
-                    self.query_one("#stat-mcp").status = "ONLINE" if is_up else "OFFLINE"
+                    self.query_one("#stat-mcp").status = (
+                        "ONLINE" if is_up else "OFFLINE"
+                    )
                     if is_up and not self.mcp_online:
                         self.log_msg("MCP Server connected.")
                         await self.check_tools()  # auto-refresh
@@ -470,13 +474,13 @@ class SingularityDashboard(App):
         ollama_cpu = 0.0
         python_cpu = 0.0
 
-        for p in psutil.process_iter(['name', 'cpu_percent', 'pid']):
+        for p in psutil.process_iter(["name", "cpu_percent", "pid"]):
             try:
-                name = (p.info.get('name') or '').lower()
-                if 'ollama' in name:
-                    ollama_cpu += (p.info.get('cpu_percent') or 0.0)
-                elif 'python' in name and p.info.get('pid') != os.getpid():
-                    python_cpu += (p.info.get('cpu_percent') or 0.0)
+                name = (p.info.get("name") or "").lower()
+                if "ollama" in name:
+                    ollama_cpu += p.info.get("cpu_percent") or 0.0
+                elif "python" in name and p.info.get("pid") != os.getpid():
+                    python_cpu += p.info.get("cpu_percent") or 0.0
             except Exception:
                 pass
 
@@ -486,7 +490,7 @@ class SingularityDashboard(App):
             graphs[1].update_data(python_cpu)
 
     async def on_button_pressed(self, event):
-        btn = getattr(event, 'button', None)
+        btn = getattr(event, "button", None)
         if not btn:
             return
         if btn.id == "btn-refresh-tools":
@@ -514,7 +518,9 @@ class SingularityDashboard(App):
 
                     for t in tools:
                         node = tree.root.add(f"[bold cyan]{t.get('name')}[/bold cyan]")
-                        node.add(f"[italic]{t.get('description', 'No description')}[/italic]")
+                        node.add(
+                            f"[italic]{t.get('description', 'No description')}[/italic]"
+                        )
 
                         props = t.get("inputSchema", {}).get("properties", {})
                         if props:
@@ -549,18 +555,20 @@ class SingularityDashboard(App):
 
             async with aiohttp.ClientSession() as session:
                 payload = {"model": model, "prompt": prompt, "stream": True}
-                async with session.post("http://localhost:11434/api/generate", json=payload, timeout=30) as r:
+                async with session.post(
+                    "http://localhost:11434/api/generate", json=payload, timeout=30
+                ) as r:
                     async for line in r.content:
                         if not line:
                             continue
                         # try to decode and parse JSON lines, best-effort
                         try:
-                            raw = line.decode('utf-8').strip()
+                            raw = line.decode("utf-8").strip()
                             if not raw:
                                 continue
                             data = json.loads(raw)
                         except Exception:
-                            piece = line.decode('utf-8', errors='ignore')
+                            piece = line.decode("utf-8", errors="ignore")
                             log.write(piece)
                             continue
 
@@ -572,7 +580,9 @@ class SingularityDashboard(App):
                         if data.get("done"):
                             total_s = data.get("total_duration", 0) / 1e9
                             eval_s = data.get("eval_duration", 0) / 1e9
-                            self.log_msg(f"Inference complete: {count} tokens in {total_s:.2f}s (eval {eval_s:.2f}s)")
+                            self.log_msg(
+                                f"Inference complete: {count} tokens in {total_s:.2f}s (eval {eval_s:.2f}s)"
+                            )
                             log.write("\n")
                             break
 

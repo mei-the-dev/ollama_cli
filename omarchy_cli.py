@@ -6,12 +6,13 @@ for users who still call the old script name. It re-exports the new API from
 `singularity_cli.py` and prints a deprecation notice when executed directly.
 """
 
-import warnings
 import asyncio
+import warnings
 
 # Import the canonical implementations from the rebranded module
 try:
-    from singularity_cli import SingularityAgent, SingularityCLI, main  # type: ignore
+    from singularity_cli import SingularityAgent  # type: ignore
+    from singularity_cli import SingularityCLI, main
 except Exception:
     raise
 
@@ -20,7 +21,10 @@ OmarchyAgent = SingularityAgent  # type: ignore[name-defined]
 OmarchyCLI = SingularityCLI  # type: ignore[name-defined]
 
 if __name__ == "__main__":
-    warnings.warn("The 'omarchy' command and API are deprecated; please use 'singularity' instead.", DeprecationWarning)
+    warnings.warn(
+        "The 'omarchy' command and API are deprecated; please use 'singularity' instead.",
+        DeprecationWarning,
+    )
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

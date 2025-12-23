@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 import pytest
 
 from omarchy_cli import SingularityCLI
@@ -17,12 +18,12 @@ def test_show_banner_runs(capsys):
 async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
     cli = SingularityCLI()
     # Ensure non-interactive environment
-    monkeypatch.setattr(sys.stdin, 'isatty', lambda: False)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
 
     # Remove any existing config
-    cfg_path = Path.home() / '.singularity' / 'config.json'
+    cfg_path = Path.home() / ".singularity" / "config.json"
     if cfg_path.exists():
-        bak = tmp_path / 'cfg_backup.json'
+        bak = tmp_path / "cfg_backup.json"
         bak.write_text(cfg_path.read_text())
         cfg_path.unlink()
     try:
@@ -30,7 +31,7 @@ async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
         # In non-interactive mode, config file should not be created/modified by prompts
         assert not cfg_path.exists()
     finally:
-        if 'bak' in locals() and bak.exists():
+        if "bak" in locals() and bak.exists():
             cfg_path.parent.mkdir(parents=True, exist_ok=True)
             cfg_path.write_text(bak.read_text())
 
@@ -38,6 +39,6 @@ async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_execute_command_async(capsys):
     cli = SingularityCLI()
-    await cli.execute_command('echo hello-singularity-test')
+    await cli.execute_command("echo hello-singularity-test")
     captured = capsys.readouterr()
-    assert 'hello-singularity-test' in captured.out
+    assert "hello-singularity-test" in captured.out

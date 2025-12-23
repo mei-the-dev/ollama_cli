@@ -1,7 +1,9 @@
 import os
+
 import aiohttp
-from textual.widgets import Static
 from textual import work
+from textual.widgets import Static
+
 from .monitor_base import BaseModule
 
 
@@ -40,24 +42,32 @@ class MCPMonitor(BaseModule):
             self._mounted = False
 
     async def do_check(self):
-        mcp_url = os.environ.get('OMARCHY_MCP_SERVER_URL', 'http://127.0.0.1:8000')
+        mcp_url = os.environ.get("OMARCHY_MCP_SERVER_URL", "http://127.0.0.1:8000")
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(f"{mcp_url.rstrip('/')}/call", json={"method": "tools/list", "params": {}}, timeout=1) as r:
+                async with session.post(
+                    f"{mcp_url.rstrip('/')}/call",
+                    json={"method": "tools/list", "params": {}},
+                    timeout=1,
+                ) as r:
                     is_up = r.status == 200
                     self.widget.set_status(is_up)
                     # Update dashboard KPI placeholder if available
                     try:
-                        port = ''
+                        port = ""
                         try:
                             from urllib.parse import urlparse
+
                             u = urlparse(mcp_url)
-                            port = u.port or ''
+                            port = u.port or ""
                         except Exception:
-                            port = ''
+                            port = ""
                         if self.app:
                             try:
-                                self.app.set_kpi('#kpi-mcp', f"MCP: {'ONLINE' if is_up else 'OFFLINE'}\nPort: {port}")
+                                self.app.set_kpi(
+                                    "#kpi-mcp",
+                                    f"MCP: {'ONLINE' if is_up else 'OFFLINE'}\nPort: {port}",
+                                )
                             except Exception:
                                 pass
                     except Exception:
