@@ -72,15 +72,424 @@ class SingularityAgent:
         self.current_plan = None
         self.mcp_server_url = None
 
-    async def start_mcp_server(self):
-        pass
+    async def start_mcp_server(self, mcp_path: str | None = None, timeout: float = 5.0) -> bool:
+        """Start the MCP server as a subprocess and capture its listening URL.
+
+        - Searches for MCP server script in the following order:
+          1. explicit `mcp_path` argument
+          2. ~/.singularity/mcp_server.py
+          3. ./mcp_server.py
+          4. ./fast_mcp_server.py
+
+        Returns True and sets `self.mcp_server_url` on success, False on failure.
+        """
+        candidates = []
+        if mcp_path:
+            candidates.append(Path(mcp_path))
+
+        candidates.extend(
+            [
+                Path.home() / ".singularity" / "mcp_server.py",
+                Path(__file__).parent / "mcp_server.py",
+                Path(__file__).parent / "fast_mcp_server.py",
+            ]
+        )
+
+        selected = None
+        for p in candidates:
+            try:
+                if p.exists():
+                    selected = p
+                    break
+            except Exception:
+                continue
+
+        if not selected:
+            console.print("[yellow]⚠️  MCP server script not found; skipping MCP startup.[/yellow]")
+            return False
+
+        try:
+            # Start the MCP server process
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable,
+                str(selected),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            self.mcp_process = proc
+
+            # Read lines until we find the listening announcement or timeout
+            start_t = asyncio.get_event_loop().time()
+            stderr_accum = []
+            while True:
+                # Check timeout
+                if asyncio.get_event_loop().time() - start_t > timeout:
+                    break
+
+                got = False
+                # Try reading from stdout
+                try:
+                    raw = await asyncio.wait_for(proc.stdout.readline(), timeout=0.20)
+                    got = True
+                except asyncio.TimeoutError:
+                    raw = b""
+
+                if raw:
+                    line = raw.decode(errors="replace").strip()
+                    url = self._parse_mcp_listen_line(line)
+                    if url:
+                        self.mcp_server_url = url
+                        console.print(f"[green]✓[/green] MCP server started at {url}")
+                        return True
+
+                # Try reading from stderr for hints/errors
+                try:
+                    err_raw = await asyncio.wait_for(proc.stderr.readline(), timeout=0.05)
+                except asyncio.TimeoutError:
+                    err_raw = b""
+
+                if err_raw:
+                    stderr_line = err_raw.decode(errors="replace").strip()
+                    stderr_accum.append(stderr_line)
+                    # Sometimes servers print the listen message to stderr
+                    url = self._parse_mcp_listen_line(stderr_line)
+                    if url:
+                        self.mcp_server_url = url
+                        console.print(f"[green]✓[/green] MCP server started at {url}")
+                        return True
+
+                if not got:
+                    await asyncio.sleep(0.05)
+                    continue
+
+            # Timeout reached; gather diagnostics
+            diag = ""
+            if stderr_accum:
+                diag = " | STDERR: " + " | ".join(stderr_accum[:5])
+
+            console.print(f"[yellow]⚠️  MCP server started but did not announce listen address in time.{diag}[/yellow]")
+            return False
+
+        except Exception as e:
+            console.print(f"[red]Failed to start MCP server: {e}[/red]")
+            return False
+
+    async def call_mcp_tool(self, name: str, arguments: Dict, timeout: float = 30.0, retries: int = 2) -> Dict:
+        """Call an MCP tool via HTTP POST and return normalized response.
+
+        Returns a dict with keys: status, data, error, warnings, execution_time_ms (if provided by server).
+        Retries on transient errors (5xx and network issues) with exponential backoff.
+        """
+        try:
+            import aiohttp
+        except Exception:
+            # Ensure aiohttp is available; install on demand
+            console.print("[yellow]Installing 'aiohttp' for MCP communication...[/yellow]")
+            subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"], check=True)
+            import aiohttp
+
+        if not getattr(self, "mcp_server_url", None):
+            return {"status": "ERROR", "error": "MCP server not running"}
+
+        url = f"{self.mcp_server_url.rstrip('/')}/call"
+
+        attempt = 0
+        while attempt <= retries:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        url,
+                        json={"name": name, "arguments": arguments},
+                        timeout=aiohttp.ClientTimeout(total=timeout),
+                    ) as resp:
+                        text = await resp.text()
+                        if resp.status >= 500:
+                            # server error - retry if attempts remain
+                            if attempt < retries:
+                                backoff = 0.2 * (2 ** attempt)
+                                await asyncio.sleep(backoff)
+                                attempt += 1
+                                continue
+                            return {"status": "ERROR", "error": f"HTTP {resp.status}: {text}"}
+
+                        # Try parse json
+                        try:
+                            data = await resp.json()
+                        except Exception:
+                            # If not JSON, return raw text
+                            return {"status": "ERROR", "error": f"Invalid JSON response: {text}"}
+
+                        # Normalize response
+                        if isinstance(data, dict) and data.get("status"):
+                            return data
+
+                        return {"status": "SUCCESS", "data": data}
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                if attempt < retries:
+                    backoff = 0.2 * (2 ** attempt)
+                    await asyncio.sleep(backoff)
+                    attempt += 1
+                    continue
+                err_msg = str(e) or repr(e) or e.__class__.__name__
+                return {"status": "ERROR", "error": err_msg}
+
 
     async def stop_mcp_server(self):
-        pass
+        """Stop the MCP subprocess started by `start_mcp_server`."""
+        proc = getattr(self, "mcp_process", None)
+        if not proc:
+            return
+
+        try:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        finally:
+            self.mcp_process = None
+            self.mcp_server_url = None
+
+    @staticmethod
+    def _parse_mcp_listen_line(line: str) -> str | None:
+        """Extract host:port from common server listening lines.
+
+        Examples matched:
+        - "MCP server listening on 127.0.0.1:12345"
+        - "listening on 0.0.0.0:54321"
+        - "Server started at http://127.0.0.1:12345"
+        - "Listening on [::]:12345" (IPv6)
+        - "Serving HTTP on hostname:1234"
+        """
+        import re
+
+        # IPv4:port
+        m = re.search(r"(\d+\.\d+\.\d+\.\d+):(\d+)", line)
+        if m:
+            host, port = m.groups()
+            return f"http://{host}:{port}"
+
+        # http://host:port or https://host:port
+        m2 = re.search(r"https?://([^\s/:\]]+):(\d+)", line)
+        if m2:
+            host, port = m2.groups()
+            return f"http://{host}:{port}"
+
+        # IPv6: [::]:port or [fe80::1]:1234
+        m3 = re.search(r"\[([0-9a-fA-F:]+)\]:(\d+)", line)
+        if m3:
+            host, port = m3.groups()
+            # IPv6 addresses should be bracketed in URLs
+            return f"http://[{host}]:{port}"
+
+        # hostname:port (fallback)
+        m4 = re.search(r"([A-Za-z0-9_.-]+):(\d+)", line)
+        if m4:
+            host, port = m4.groups()
+            # ignore matches like 'port: 1234' where preceding word is not a host
+            if not line.lower().startswith("port"):
+                return f"http://{host}:{port}"
+
+        return None
+
+    async def generate_streaming(self, prompt: str, system: str | None = None, timeout: float = 120.0):
+        """Stream responses from Ollama's /api/chat endpoint.
+
+        Yields content fragments as they arrive and appends the final content to
+        `self.conversation_history` as an assistant message.
+        """
+        try:
+            import aiohttp
+        except Exception:
+            console.print("[yellow]Installing 'aiohttp' for streaming...[/yellow]")
+            subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"], check=True)
+            import aiohttp
+
+        messages = self.conversation_history.copy()
+        if system:
+            messages.insert(0, {"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "options": {"temperature": 0.2},
+        }
+
+        full_response = ""
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "http://localhost:11434/api/chat",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=timeout),
+                ) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        yield f"Error: Ollama returned HTTP {resp.status}: {text}"
+                        return
+
+                    async for raw in resp.content:
+                        if not raw:
+                            continue
+                        text = raw.decode(errors="replace")
+                        for line in text.splitlines():
+                            if not line.strip():
+                                continue
+                            try:
+                                chunk = json.loads(line)
+                            except Exception:
+                                continue
+
+                            msg = None
+                            if isinstance(chunk, dict):
+                                if "message" in chunk and isinstance(chunk["message"], dict):
+                                    msg = chunk["message"].get("content", "")
+                                elif "delta" in chunk and isinstance(chunk["delta"], dict):
+                                    msg = chunk["delta"].get("content", "")
+                                elif chunk.get("content"):
+                                    msg = chunk.get("content")
+                                elif chunk.get("done"):
+                                    break
+
+                            if msg:
+                                full_response += msg
+                                yield msg
+
+        except asyncio.TimeoutError as e:
+            yield f"Error: Timeout while streaming: {e}"
+            return
+        except Exception as e:
+            yield f"Error: {e}"
+            return
+        finally:
+            # Ensure conversation history is updated once streaming finishes
+            if full_response:
+                self.conversation_history.append({"role": "user", "content": prompt})
+                self.conversation_history.append({"role": "assistant", "content": full_response})
 
     async def execute_with_animation(self, prompt, status, system=None):
-        # Dummy implementation for CLI to work
-        console.print(f"[bold green]Agent:[/bold green] {prompt}")
+        """Async agent with minimal tool support.
+
+        Supports lightweight handling for:
+        - @web <query> : quick web lookups (DuckDuckGo instant answer)
+        - @web ... weather for <location> : weather via wttr.in
+
+        Falls back to canned responses when tools/model are not available.
+        """
+        try:
+            with console.status(f"[cyan]{status}[/cyan]", spinner="dots"):
+                # Small async yield so spinner is visible briefly
+                await asyncio.sleep(0.08)
+
+                # Normalize prompt strings
+                text = ""
+                if isinstance(prompt, str):
+                    # If invoked with the 'User query:' wrapper, unwrap it
+                    if prompt.startswith("User query:"):
+                        text = prompt.split("User query:", 1)[1].strip()
+                    else:
+                        text = prompt.strip()
+
+                # Tool: @web
+                if text.startswith("@web") or text.startswith("@web:") or " @web " in text:
+                    # Extract query after @web or @web:
+                    parts = text.split("@web", 1)[1].lstrip(": ")
+                    query = parts.strip() or ""
+
+                    # Import requests on demand (install if missing)
+                    try:
+                        import requests
+                    except Exception:
+                        console.print("[yellow]Installing 'requests' for web lookups...[/yellow]")
+                        subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True)
+                        import requests
+
+                    # Heuristic: if user asks for weather, use wttr.in which provides concise forecasts
+                    ql = query.lower()
+                    if "weather" in ql:
+                        # Try to extract a location after 'for' otherwise take the remaining query
+                        import re
+
+                        m = re.search(r"weather(?: for)? (.+)$", ql)
+                        location = (m.group(1) if m else query).strip() or "" 
+                        location = location.split()[0] if location else ""
+                        location = location.replace(" ", "%20")
+                        url = f"https://wttr.in/{location or '?' }?format=3"
+
+                        try:
+                            resp = await asyncio.to_thread(lambda: requests.get(url, timeout=5))
+                            if resp.status_code == 200:
+                                reply = f"Web lookup (weather): {resp.text.strip()}"
+                            else:
+                                reply = f"Weather lookup failed (status {resp.status_code})"
+                        except Exception as e:
+                            reply = f"Weather lookup error: {e}"
+
+                    else:
+                        # Generic lookup via DuckDuckGo Instant Answer API
+                        from urllib.parse import quote_plus
+
+                        api = (
+                            "https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&q="
+                            + quote_plus(query)
+                        )
+                        try:
+                            resp = await asyncio.to_thread(lambda: requests.get(api, timeout=5))
+                            if resp.status_code == 200:
+                                j = resp.json()
+                                abstract = j.get("AbstractText") or j.get("Answer") or ""
+                                if abstract:
+                                    reply = f"Web lookup result: {abstract}"
+                                else:
+                                    # Fall back to the first related topic text if available
+                                    rel = j.get("RelatedTopics") or []
+                                    text_snip = ""
+                                    if rel and isinstance(rel, list):
+                                        first = rel[0]
+                                        if isinstance(first, dict):
+                                            text_snip = first.get("Text") or ""
+                                    reply = (
+                                        f"Web lookup (no instant answer). Top related: {text_snip or 'No quick answer found.'}"
+                                    )
+                            else:
+                                reply = f"Web lookup failed (status {resp.status_code})"
+                        except Exception as e:
+                            reply = f"Web lookup error: {e}"
+
+                # Non-web canned responses
+                elif text.startswith("Generate code for:"):
+                    task = text.split("Generate code for:", 1)[1].strip()
+                    reply = (
+                        f"Code generation requested for: {task}\n"
+                        "(This environment provides a placeholder response; use /mode code for structured output.)"
+                    )
+                elif text.startswith("Create a detailed implementation plan for:"):
+                    task = text.split("Create a detailed implementation plan for:", 1)[1].strip()
+                    reply = (
+                        f"Plan for {task}:\n1) Analyze requirements\n2) Design components\n3) Implement iteratively\n4) Test and harden"
+                    )
+                elif text:
+                    reply = f"Hello! I received your message: {text}\nI can help with code generation, analysis, and plans — try `/help` or `/mode code`."
+                else:
+                    reply = "Agent: awaiting input"
+
+                console.print(f"[bold green]Agent:[/bold green] {reply}")
+                # Persist a minimal conversation history entry
+                self.conversation_history.append({"role": "assistant", "content": reply})
+                return reply
+        except Exception as e:
+            console.print(f"[red]Error in agent execution: {e}[/red]")
+            return ""
 
     def display_plan(self, plan):
         console.print(f"[cyan]Plan:[/cyan] {plan}")
@@ -727,8 +1136,13 @@ async def main():
                 pass
 
 
+def run():
+    """Sync entry point for console_scripts and installer-friendly invocation."""
+    asyncio.run(main())
+
+
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        run()
     except KeyboardInterrupt:
         console.print("\n[yellow]Goodbye![/yellow]")
