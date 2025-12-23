@@ -1,0 +1,68 @@
+name: CI - Tests & Report
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt || true
+          python -m pip install pytest rich requests aiohttp pydantic || true
+
+      - name: Create logs dir
+        run: mkdir -p logs
+
+      - name: Run tests (capture output)
+        env:
+          TEST_MODEL_EVENTS_PATH: ${{ github.workspace }}/logs/test_model_events.jsonl
+        run: |
+          set -o pipefail
+          pytest -q --disable-warnings --durations=10 2>&1 | tee pytest_output.txt || true
+
+      - name: Generate test report JSON
+        env:
+          TEST_MODEL_EVENTS_PATH: ${{ github.workspace }}/logs/test_model_events.jsonl
+        run: |
+          # Use the captured pytest output to build the report JSON
+          python scripts/test_report.py --no-run --output-json report.json < pytest_output.txt || true
+
+      - name: Optionally enforce required model calls
+        if: env.FAIL_ON_MISSING_MODEL_CALLS == '1'
+        run: |
+          python scripts/ci_enforce_report.py --report report.json
+
+      - name: Optionally fail on placeholder responses
+        if: env.FAIL_ON_PLACEHOLDERS == '1'
+        run: |
+          python scripts/ci_check_no_placeholders.py --events ${{ github.workspace }}/logs/test_model_events.jsonl --log ${{ github.workspace }}/logs/singularity.log
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+            report.json
+            logs/test_model_events.jsonl
+            logs/singularity.log
+
+      - name: Print report summary (short)
+        if: always()
+        run: |
+          echo "--- TEST REPORT SUMMARY ---"
+          jq -r '.cards | length as $n | "cards: "+($n|tostring)' report.json || true

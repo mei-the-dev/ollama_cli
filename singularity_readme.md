@@ -384,6 +384,42 @@ singularity
 
 ## 🐛 Troubleshooting
 
+
+## 🧪 Testing & Reporting 🔧
+
+Singularity includes a structured test-event pipeline and a pretty reporter that emits both a human-friendly terminal view and a canonical `report.json` useful for CI and dashboards.
+
+- Structured events file: set `TEST_MODEL_EVENTS_PATH` to control where test events are written (default: `logs/test_model_events.jsonl`). When set, the agent emits structured `PROMPT`, `ASSISTANT`, and `PARSED_TOOL` events during tests.
+
+- Running the reporter locally:
+
+```bash
+# Run pytest and generate a pretty terminal report + JSON report
+# This command runs the test suite, then generates `report.json` and stores events in logs/
+python scripts/test_report.py --output-json report.json
+```
+
+- Using the captured pytest output (single run):
+
+```bash
+pytest -q 2>&1 | tee pytest_output.txt
+python scripts/test_report.py --no-run --output-json report.json < pytest_output.txt
+```
+
+- CI integration (GitHub Actions): the repository provides `.github/workflows/test-report.yml` which:
+  - Sets `TEST_MODEL_EVENTS_PATH=logs/test_model_events.jsonl`
+  - Runs the test suite and writes the captured pytest output
+  - Calls `scripts/test_report.py --no-run --output-json report.json`
+  - Uploads `report.json` and `logs/test_model_events.jsonl` as artifacts
+
+- Optional enforcement: to fail CI when required live/integration model calls are missing, set `FAIL_ON_MISSING_MODEL_CALLS=1` in the workflow environment; the workflow will run `scripts/ci_enforce_report.py --report report.json` and fail if any "live"/"integration" test has no model-emitted call.
+
+- Schema & validation: lightweight Pydantic models and validation helpers live in `tests/reporting/`.
+  - `tests/reporting/models.py` contains `ModelEvent` and `Card` models (Pydantic optional fallback available).
+  - Use `tests.reporting.get_event_schema()` to retrieve a JSON-like schema and `tests.reporting.validate_jsonl_events(path)` to validate a JSONL events file.
+
+This pipeline makes model interactions auditable, machine-friendly, and easy to publish as CI artifacts for dashboards and PR checks.
+
 ### Ollama Not Running
 ```bash
 # Start Ollama

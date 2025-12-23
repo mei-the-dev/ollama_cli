@@ -183,14 +183,24 @@ def test_manage_context(mcp):
     assert r.status == ToolStatus.SUCCESS
 
 
-def test_execute_code_echo(mcp):
+def test_execute_code_echo(mcp, tmp_path, monkeypatch):
     import asyncio
+
+    # Ensure events file is present to assert no PARSED_TOOL is emitted for execute_code
+    import os
+    events = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(events))
 
     r = asyncio.run(
         mcp.execute_code({"command": "echo hello", "cwd": ".", "capture_output": True})
     )
     assert r.status == ToolStatus.SUCCESS
     assert "hello" in r.data.get("stdout", "")
+
+    # If events file exists, ensure no PARSED_TOOL was emitted by code execution
+    if events.exists():
+        evs = [json.loads(l) for l in events.read_text(encoding='utf-8').splitlines() if l.strip()]
+        assert not any(e.get('event') == 'PARSED_TOOL' for e in evs)
 
 
 def test_http_call_endpoint(tmp_path):

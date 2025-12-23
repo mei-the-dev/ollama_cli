@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import json
 import pytest
 
 from omarchy_cli import SingularityCLI
@@ -37,8 +38,19 @@ async def test_startup_prompts_noninteractive_skips(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_execute_command_async(capsys):
+async def test_execute_command_async(capsys, tmp_path, monkeypatch):
     cli = SingularityCLI()
+
+    # Ensure events file is present to assert this command execution does not emit PARSED_TOOL
+    import os
+    events = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(events))
+
     await cli.execute_command("echo hello-singularity-test")
     captured = capsys.readouterr()
     assert "hello-singularity-test" in captured.out
+
+    # If events file exists, assert no PARSED_TOOL emitted by local command execution
+    if events.exists():
+        evs = [json.loads(l) for l in events.read_text(encoding='utf-8').splitlines() if l.strip()]
+        assert not any(e.get('event') == 'PARSED_TOOL' for e in evs)

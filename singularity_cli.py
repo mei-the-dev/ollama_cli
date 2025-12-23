@@ -312,6 +312,13 @@ class SingularityAgent:
             subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"], check=True)
             import aiohttp
 
+        # Log the prompt (include pytest test name if available for diagnostics)
+        try:
+            pytest_test = os.environ.get("PYTEST_CURRENT_TEST", "unknown")
+            logger.info(f"PROMPT [{pytest_test}]: {prompt}")
+        except Exception:
+            pass
+
         messages = self.conversation_history.copy()
         if system:
             messages.insert(0, {"role": "system", "content": system})
@@ -379,6 +386,33 @@ class SingularityAgent:
             if full_response:
                 self.conversation_history.append({"role": "user", "content": prompt})
                 self.conversation_history.append({"role": "assistant", "content": full_response})
+                # Log assistant output for external tooling and diagnostics
+                try:
+                    logger.info(f"assistant: {full_response}")
+                except Exception:
+                    pass
+
+                # Emit ASSISTANT structured event for test reporting if enabled
+                try:
+                    pytest_test = os.environ.get("PYTEST_CURRENT_TEST") or "manual"
+                    path = os.environ.get("TEST_MODEL_EVENTS_PATH")
+                    if path:
+                        try:
+                            from tests.model_events import ModelEventLogger
+
+                            mev = ModelEventLogger(test_node=pytest_test, out_path=path)
+                            mev.emit("ASSISTANT", {"content": full_response})
+                        except Exception:
+                            try:
+                                import datetime
+
+                                ev = {"ts": datetime.datetime.utcnow().isoformat() + "Z", "test": pytest_test, "event": "ASSISTANT", "payload": {"content": full_response}}
+                                with open(path, "a", encoding="utf-8") as fh:
+                                    fh.write(json.dumps(ev) + "\n")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
 
     @staticmethod
     def _extract_json_object(text: str) -> str | None:
@@ -404,6 +438,29 @@ class SingularityAgent:
         - If the final response is a JSON object with a `tool` key, call the MCP tool via `call_mcp_tool`
         - Returns the model response or an execution summary when a tool was invoked
         """
+        # Emit a structured PROMPT event if the test reporter is enabled
+        try:
+            pytest_test = os.environ.get("PYTEST_CURRENT_TEST") or "manual"
+            path = os.environ.get("TEST_MODEL_EVENTS_PATH")
+            if path:
+                try:
+                    from tests.model_events import ModelEventLogger
+
+                    mev = ModelEventLogger(test_node=pytest_test, out_path=path)
+                    mev.emit("PROMPT", {"prompt": prompt})
+                except Exception:
+                    # Fallback to direct append
+                    try:
+                        import datetime
+
+                        ev = {"ts": datetime.datetime.utcnow().isoformat() + "Z", "test": pytest_test, "event": "PROMPT", "payload": {"prompt": prompt}}
+                        with open(path, "a", encoding="utf-8") as fh:
+                            fh.write(json.dumps(ev) + "\n")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         full = ""
         try:
             async for chunk in self.generate_streaming(prompt, system=system):
@@ -414,6 +471,28 @@ class SingularityAgent:
 
         # Attempt to parse a tool call from the final response
         body = full.strip()
+
+        # Persist assistant message as a structured event if enabled (ensures events are recorded even when streaming is monkeypatched)
+        try:
+            pytest_test = os.environ.get("PYTEST_CURRENT_TEST") or "manual"
+            path = os.environ.get("TEST_MODEL_EVENTS_PATH")
+            if path and body:
+                try:
+                    from tests.model_events import ModelEventLogger
+
+                    mev = ModelEventLogger(test_node=pytest_test, out_path=path)
+                    mev.emit("ASSISTANT", {"content": body})
+                except Exception:
+                    try:
+                        import datetime
+
+                        ev = {"ts": datetime.datetime.utcnow().isoformat() + "Z", "test": pytest_test, "event": "ASSISTANT", "payload": {"content": body}}
+                        with open(path, "a", encoding="utf-8") as fh:
+                            fh.write(json.dumps(ev) + "\n")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         # Extract JSON object substring if present
         def _extract_json_object(text: str) -> str | None:
@@ -435,8 +514,10 @@ class SingularityAgent:
         if json_str:
             try:
                 obj = json.loads(json_str)
-                tool_name = obj.get("tool")
-                tool_args = obj.get("args", {})
+                # Accept alternative key names that models sometimes output (function_name, action, tool_name)
+                tool_name = obj.get("tool") or obj.get("function_name") or obj.get("action") or obj.get("tool_name")
+                # Accept alternative argument containers (args, arguments, params)
+                tool_args = obj.get("args", {}) or obj.get("arguments", {}) or obj.get("params", {})
 
                 # Validate parsed tool call
                 if not tool_name or not isinstance(tool_name, str):
@@ -461,12 +542,38 @@ class SingularityAgent:
                         if k in tool_args and "content" not in tool_args:
                             tool_args["content"] = tool_args[k]
 
+                # Emit PARSED_TOOL event if enabled
+                try:
+                    pytest_test = os.environ.get("PYTEST_CURRENT_TEST") or "manual"
+                    path = os.environ.get("TEST_MODEL_EVENTS_PATH")
+                    if path:
+                        try:
+                            from tests.model_events import ModelEventLogger
+
+                            mev = ModelEventLogger(test_node=pytest_test, out_path=path)
+                            mev.emit("PARSED_TOOL", {"tool": tool_name, "args": tool_args, "raw": obj})
+                        except Exception:
+                            try:
+                                import datetime
+
+                                ev = {"ts": datetime.datetime.utcnow().isoformat() + "Z", "test": pytest_test, "event": "PARSED_TOOL", "payload": {"tool": tool_name, "args": tool_args, "raw": obj}}
+                                with open(path, "a", encoding="utf-8") as fh:
+                                    fh.write(json.dumps(ev) + "\n")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
                 # Append a system message with parsed and normalized tool call for diagnostics
                 try:
                     self.conversation_history.append({
                         "role": "system",
                         "content": f"Parsed tool call: {json.dumps(obj)} -> normalized to: {{'tool': '{tool_name}', 'args': {json.dumps(tool_args)}}}"
                     })
+                    try:
+                        logger.info(f"Parsed tool call: {json.dumps(obj)} -> normalized to: {{'tool': '{tool_name}', 'args': {json.dumps(tool_args)}}}")
+                    except Exception:
+                        pass
                 except Exception:
                     pass
 
@@ -485,6 +592,10 @@ class SingularityAgent:
 
                 # Append a system message with tool result to history
                 self.conversation_history.append({"role": "system", "content": f"Tool {tool_name} executed with result: {res}"})
+                try:
+                    logger.info(f"Tool {tool_name} executed with result: {res}")
+                except Exception:
+                    pass
 
                 # Treat response as failure if status is not SUCCESS or data contains an 'error' key
                 data = res.get("data") if isinstance(res, dict) else None

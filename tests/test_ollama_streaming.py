@@ -26,7 +26,12 @@ async def _start_streaming_server(handler):
     return runner, url
 
 
-def test_generate_streaming_basic():
+def test_generate_streaming_basic(tmp_path, model_event_logger):
+    # Ensure events for this streaming test are written to a temp file
+    events_path = tmp_path / "events.jsonl"
+    import os
+    os.environ["TEST_MODEL_EVENTS_PATH"] = str(events_path)
+
     async def handler(request):
         resp = web.StreamResponse(status=200, headers={'Content-Type': 'application/json'})
         await resp.prepare(request)
@@ -45,13 +50,6 @@ def test_generate_streaming_basic():
         runner, url = await _start_streaming_server(handler)
         try:
             agent = singularity_cli.SingularityAgent()
-            # point to local server via overriding the base URL used in generate_streaming
-            # monkeypatching the endpoint by setting environment is not needed; we will temporarily
-            # patch the constant URL by assigning an attribute
-            original = 'http://localhost:11434'
-            # use monkeypatching-like substitution by editing the method closure isn't trivial,
-            # so instead we'll create a small wrapper to call stream via session posting to our test server
-
             # Replace the method to call our test server
             async def generate_streaming_to_url(prompt, system=None, timeout=120.0):
                 import aiohttp
@@ -81,11 +79,19 @@ def test_generate_streaming_basic():
             # bind our wrapper
             agent.generate_streaming = generate_streaming_to_url
 
-            out = []
-            async for piece in agent.generate_streaming('hi'):
-                out.append(piece)
-            assert ''.join(out) == 'Hello world'
+            # Use the agent's higher-level API so PROMPT/ASSISTANT events are emitted
+            res = await agent.process_with_tools('hi')
+            # process_with_tools returns None for non-tool responses; just ensure conversation history is updated
             assert agent.conversation_history and agent.conversation_history[-1]['content'] == 'Hello world'
+
+            # Validate events were emitted
+            lines = list(events_path.read_text(encoding='utf-8').splitlines())
+            evs = [json.loads(l) for l in lines]
+            kinds = [e.get('event') for e in evs]
+            assert 'PROMPT' in kinds
+            assert 'ASSISTANT' in kinds
+            # Since this streaming response contains no tool call, assert PARSED_TOOL is not emitted
+            assert not any(e.get('event') == 'PARSED_TOOL' for e in evs)
         finally:
             await runner.cleanup()
 

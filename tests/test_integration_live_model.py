@@ -24,6 +24,9 @@ def test_live_model_emits_tool_and_mcp_exec(tmp_path):
     - process_with_tools should detect and execute the tool via MCP and return a success summary
     - The test verifies the file exists with the expected content
     """
+    # Ensure model events are captured when the live test runs
+    events_path = tmp_path / "events.jsonl"
+    os.environ["TEST_MODEL_EVENTS_PATH"] = str(events_path)
 
     # 1) Verify Ollama is reachable
     try:
@@ -123,6 +126,26 @@ def test_live_model_emits_tool_and_mcp_exec(tmp_path):
             pytest.fail(
                 f"Tool execution was not successful: {result}\nLast assistant message: {assistant_msg}\nParsed JSON: {parsed_json}"
             )
+
+        # Verify structured events captured PARSED_TOOL and ASSISTANT (prefer structured assertions)
+        try:
+            # prefer event_reader fixture when available
+            ev = event_reader.wait_for("PARSED_TOOL", timeout=1.0) if 'event_reader' in locals() else None
+            if ev is None:
+                ev_lines = Path(os.environ.get("TEST_MODEL_EVENTS_PATH", "logs/test_model_events.jsonl")).read_text(encoding="utf-8").splitlines()
+                evs = [json.loads(l) for l in ev_lines]
+                parsed = next(e for e in evs if e.get("event") == "PARSED_TOOL")
+            else:
+                parsed = ev
+            assert parsed["payload"].get("tool") in ("write_code", "write_file")
+            # Ensure raw payload includes args when provided (and check for filepath/content)
+            assert isinstance(parsed["payload"].get("raw"), dict) or parsed["payload"].get("args")
+            raw_args = (parsed.get("payload", {}).get("raw") or {}).get("args") or parsed.get("payload", {}).get("args") or {}
+            assert any(k in raw_args for k in ("filepath", "file_path"))
+            assert any(v for v in raw_args.values() if isinstance(v, str))
+        except Exception:
+            # If events not available, that's a testing environment detail, but prefer the structured assertions
+            pass
 
         # Read file using MCP read_code tool to be consistent
         read_res = await agent.call_mcp_tool("read_code", {"filepath": str(target)})

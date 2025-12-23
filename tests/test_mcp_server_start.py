@@ -1,6 +1,7 @@
 import asyncio
 import types
 import pytest
+import json
 from pathlib import Path
 
 import singularity_cli
@@ -65,9 +66,18 @@ def test_start_mcp_server_success(monkeypatch, tmp_path):
 
     agent = singularity_cli.SingularityAgent()
 
+    # Ensure events file is present to assert no PARSED_TOOL emitted by server process
+    import os
+    events = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(events))
+
     result = asyncio.run(agent.start_mcp_server(timeout=1.0))
     assert result is True
     assert agent.mcp_server_url == "http://127.0.0.1:54321"
+
+    if events.exists():
+        evs = [json.loads(l) for l in events.read_text(encoding='utf-8').splitlines() if l.strip()]
+        assert not any(e.get('event') == 'PARSED_TOOL' for e in evs)
 
 
 def test_start_mcp_server_timeout(monkeypatch):

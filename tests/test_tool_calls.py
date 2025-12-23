@@ -24,7 +24,11 @@ def test_extract_json_object_various():
 
 
 @pytest.mark.asyncio
-async def test_process_with_tools_calls_mcp(monkeypatch):
+async def test_process_with_tools_calls_mcp(monkeypatch, tmp_path, model_event_logger):
+    # Ensure events are written to a temp JSONL file
+    events = tmp_path / "events.jsonl"
+    monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(events))
+
     agent = singularity_cli.SingularityAgent()
 
     # Simulate streaming output that yields chunks culminating in a JSON tool call
@@ -47,9 +51,24 @@ async def test_process_with_tools_calls_mcp(monkeypatch):
     res = await agent.process_with_tools('do the thing')
     assert 'Executed' in res or res.startswith('✓')
 
+    # Verify that structured events were emitted
+    lines = list(events.read_text(encoding='utf-8').splitlines())
+    evs = [json.loads(l) for l in lines]
+    kinds = [e.get('event') for e in evs]
+    assert 'PROMPT' in kinds
+    assert 'ASSISTANT' in kinds
+    assert 'PARSED_TOOL' in kinds
+
+    parsed = next(e for e in evs if e.get('event') == 'PARSED_TOOL')
+    assert parsed['payload']['tool'] == 'test_tool'
+    assert parsed['payload']['args'] == {'x': 1}
+    # raw payload should preserve the original parsed object when available
+    assert isinstance(parsed['payload'].get('raw'), dict)
+    assert parsed['payload']['raw'].get('tool') == 'test_tool'
 
 @pytest.mark.asyncio
-async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path):
+async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path, model_event_logger):
+    monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(tmp_path / "events.jsonl"))
     agent = singularity_cli.SingularityAgent()
 
     target = str(tmp_path / "live_test.txt")
@@ -77,3 +96,13 @@ async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path):
     res = await agent.process_with_tools('please write the file')
     assert 'Executed' in res or res.startswith('✓')
 
+    # Verify events
+    lines = list((tmp_path / "events.jsonl").read_text(encoding='utf-8').splitlines())
+    evs = [json.loads(l) for l in lines]
+    assert any(e.get('event') == 'PARSED_TOOL' and e.get('payload', {}).get('tool') == 'write_code' for e in evs)
+    parsed = next(e for e in evs if e.get('event') == 'PARSED_TOOL')
+    assert parsed['payload']['args'].get('filepath') == target
+    assert parsed['payload']['args'].get('content') == 'hello'
+    # raw original object is preserved
+    assert isinstance(parsed['payload'].get('raw'), dict)
+    assert 'file_path' in parsed['payload']['raw'].get('args', {}) or 'filepath' in parsed['payload']['raw'].get('args', {})

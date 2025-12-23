@@ -35,14 +35,26 @@ def test_call_mcp_tool_success():
         assert payload['name'] == 'test_tool'
         return web.json_response({'status': 'SUCCESS', 'data': {'result': 'ok'}})
 
-    async def inner():
+    async def inner(tmp_path=None):
         runner, url = await _start_test_server(handler)
         try:
             agent = singularity_cli.SingularityAgent()
             agent.mcp_server_url = url
+
+            # Ensure events file is present but expect no PARSED_TOOL from direct MCP calls
+            import os
+            events = tmp_path / "events.jsonl" if tmp_path is not None else None
+            if events is not None:
+                os.environ["TEST_MODEL_EVENTS_PATH"] = str(events)
+
             res = await agent.call_mcp_tool('test_tool', {'x': 1})
             assert res['status'] == 'SUCCESS'
             assert res['data']['result'] == 'ok'
+
+            # If events file exists, assert no PARSED_TOOL emitted by direct MCP call
+            if events is not None and events.exists():
+                evs = [json.loads(l) for l in events.read_text(encoding='utf-8').splitlines() if l.strip()]
+                assert not any(e.get('event') == 'PARSED_TOOL' for e in evs)
         finally:
             await runner.cleanup()
 
