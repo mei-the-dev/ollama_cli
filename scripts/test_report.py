@@ -29,13 +29,8 @@ try:
     from rich.text import Text
     from rich import box
 except Exception:
-    print("Installing 'rich' for colorful reporting...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "rich"], check=True)
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.text import Text
-    from rich import box
+    print("Missing dependency 'rich'. Install with: python -m pip install rich", file=sys.stderr)
+    sys.exit(2)
 
 console = Console()
 
@@ -346,36 +341,18 @@ def render_report(output: str):
     tail = "\n".join(output.splitlines()[-20:])
     console.print(Panel(Text(tail), title="Last output (tail)", expand=False, box=box.ROUNDED))
 
-    # Prefer structured JSONL events if available
+    # Prefer structured JSONL events if available; only load for terminal display (no file exports)
     events_path = os.environ.get("TEST_MODEL_EVENTS_PATH") or os.path.join(os.getcwd(), "logs", "test_model_events.jsonl")
     cards = []
     if os.path.exists(events_path):
         try:
-            from tests.reporting import parse_jsonl_events, build_cards_from_events, export_report_json
+            from tests.reporting import parse_jsonl_events, build_cards_from_events
 
             by_test = parse_jsonl_events(events_path)
             cards = build_cards_from_events(by_test)
-
-            # Optionally export canonical JSON for CI when TEST_REPORT_JSON_OUTPUT env var is set
-            out_json = os.environ.get("TEST_REPORT_JSON_OUTPUT")
-            if out_json:
-                try:
-                    export_report_json(cards, out_json)
-                    console.print(f"[dim]Exported report JSON to {out_json}[/dim]")
-                except Exception:
-                    pass
-            # Optionally export HTML if requested via env var or CLI arg
-            out_html = args.output_html or os.environ.get("TEST_REPORT_HTML_OUTPUT") or os.environ.get("TEST_REPORT_HTML")
-            if out_html:
-                try:
-                    from scripts.export_report_html import export_html
-
-                    export_html(out_json, out_html)
-                    console.print(f"[dim]Exported HTML report to {out_html}[/dim]")
-                except Exception:
-                    pass
-        except Exception:
-            cards = []
+            console.print(f"[dim]Loaded {len(cards)} structured event cards from {events_path}[/dim]")
+        except Exception as e:
+            console.print(f"[yellow]Failed to parse structured events: {e}[/yellow]")
 
     # Fallback to heuristic model output parsing if no structured events found
     if not cards:
@@ -483,12 +460,43 @@ def render_report(output: str):
         # Build Model Call Cards (PROMPT -> assistant pairs)
         cards = collect_model_call_cards(log_path=os.path.join(os.getcwd(), "logs", "singularity.log"), max_cards=999)
 
-        # Ensure every collected test has a card (create placeholder if missing)
+        # Ensure every collected test has a card (create placeholder if missing), enrich with metadata and snippet
         collected_tests = collect_all_tests()
         existing_tests = [c.get("test", "") for c in cards]
         for t in collected_tests:
             if not any(t in et or et in t for et in existing_tests):
-                cards.append({"test": t, "prompt": "(no prompt logged)", "answer": "(no model call)", "parsed_tool": None})
+                # Try to enrich placeholder with file, line, markers, description and a small test snippet
+                try:
+                    meta = reporting._extract_test_metadata(t)
+                except Exception:
+                    meta = {"file": None, "line": None, "description": None, "markers": []}
+                test_snippet = None
+                try:
+                    tf = meta.get("file")
+                    ln = meta.get("line")
+                    if tf and ln and os.path.exists(tf):
+                        with open(tf, "r", encoding="utf-8", errors="ignore") as fh:
+                            lines = fh.read().splitlines()
+                        start = max(ln - 1, 0)
+                        snippet = lines[start : start + 6]
+                        test_snippet = "\n".join(snippet).strip()
+                except Exception:
+                    test_snippet = None
+
+                card = {
+                    "test": t,
+                    "file": meta.get("file"),
+                    "line": meta.get("line"),
+                    "markers": meta.get("markers", []),
+                    "description": meta.get("description") or "(no test description)",
+                    "test_snippet": test_snippet,
+                    "prompt": "(no prompt logged)",
+                    "answer": "(no model call)",
+                    "parsed_tool": None,
+                    "intent": "No model interaction expected",
+                    "timestamps": {},
+                }
+                cards.append(card)
 
         # Load optional overrides to customize descriptions/results
         overrides_path = os.path.join(os.getcwd(), "test_report_overrides.json")
@@ -502,57 +510,123 @@ def render_report(output: str):
         # Sort cards by test name for stable output
         cards_sorted = sorted(cards, key=lambda c: c.get("test", ""))
 
-        # Print cards with custom descriptions/results for non-model calls
-        for idx, c in enumerate(cards_sorted, start=1):
-            card_title = f"{idx}. {c.get('test', 'unknown')}"
+        # Report-level feature flags via env vars
+        hide_empty = os.environ.get("HIDE_EMPTY_CARDS") == "1"
+        only_model_calls = os.environ.get("ONLY_MODEL_CALLS") == "1"
+        group_by_module = os.environ.get("GROUP_BY_MODULE") == "1"
+
+        # Counters for summary
+        counts_cards = {"PASS": 0, "MISSING": 0, "NO CALL": 0}
+
+        # Optionally group cards by file/module
+        prev_file = None
+        display_index = 1
+        for c in cards_sorted:
+            file = c.get("file")
             ans = c.get("answer", "")
-            try:
-                parsed = json.loads(ans)
-                ans_render = Syntax(json.dumps(parsed, indent=2), "json", theme="monokai", line_numbers=False)
-            except Exception:
-                ans_render = Syntax(ans, "text", theme="monokai", line_numbers=False)
 
+            # Skip empty placeholders when requested
+            if only_model_calls and (not ans or ans == "(no model call)"):
+                continue
+            if hide_empty and (not ans or ans == "(no model call)"):
+                continue
+
+            # Grouping header
+            if group_by_module and file and file != prev_file:
+                console.print(Panel(Text(f"{file}", style=f"bold {PALETTE['primary']}"), box=box.MINIMAL, expand=True, border_style=PALETTE['accent2']))
+                prev_file = file
+
+            # Pretty title with result badge
             measurement = c.get("test", "unknown")
-
-            # Determine expectations and status
             override = overrides.get(measurement, {})
+
             if ans == "(no model call)":
                 description = override.get("description") or (
                     "Live model integration — expected a model-emitted tool call" if any(k in measurement.lower() for k in ("live", "integration", "ollama", "stream")) else "No model interaction expected"
                 )
                 expected = override.get("expected") or ("Model call required" if "expected" not in override and "live" in measurement.lower() else override.get("expected", "N/A"))
-                # determine result
                 if "model" in expected.lower() and "required" in expected.lower():
                     result_text = "MISSING"
                     result_style = "bold white on red"
                 else:
-                    result_text = "OK"
-                    result_style = f"bold {PALETTE['accent2']}"
+                    result_text = "NO CALL"
+                    result_style = f"bold {PALETTE['muted']}"
             else:
-                # there was an answer; mark as PASS
                 description = override.get("description") or "Model interaction recorded"
                 expected = override.get("expected") or "Model call occurred"
                 result_text = "PASS"
                 result_style = "bold white on green"
 
+            counts_cards.setdefault(result_text, 0)
+            counts_cards[result_text] = counts_cards.get(result_text, 0) + 1
+
+            # Render answer with syntax highlighting
+            try:
+                parsed = json.loads(ans)
+                ans_render = Syntax(json.dumps(parsed, indent=2), "json", theme="monokai", line_numbers=False)
+            except Exception:
+                ans_render = Syntax(ans or "(no model call)", "text", theme="monokai", line_numbers=False)
+
+            # Build card body
             sub = Table.grid(expand=False)
             sub.add_column(ratio=1)
+
+            # Context lines
+            ctx_lines = []
+            line = c.get("line")
+            markers = c.get("markers") or []
+            if file:
+                ctx_lines.append(f"File: {file}{(':' + str(line)) if line else ''}")
+            if markers:
+                ctx_lines.append("Markers: " + ", ".join(markers))
+            if ctx_lines:
+                sub.add_row(Text("Context:", style=f"bold {PALETTE['primary']}"))
+                for cl in ctx_lines:
+                    sub.add_row(Text(cl, style=PALETTE['muted']))
+
+            sub.add_row(Text("Description:", style=f"bold {PALETTE['primary']}"))
+            sub.add_row(Text(c.get('description', '(no test description)'), style=PALETTE['muted']))
+
+            snippet = c.get('test_snippet')
+            if snippet and (not c.get('prompt') or c.get('prompt') == '(no prompt logged)'):
+                sub.add_row(Text("Test snippet:", style=f"bold {PALETTE['primary']}"))
+                from rich.syntax import Syntax
+
+                lines = snippet.splitlines()[:4]
+                sub.add_row(Syntax("\n".join(lines), "python", theme="monokai", line_numbers=False))
+
             sub.add_row(Text("Prompt:", style=f"bold {PALETTE['primary']}"))
             sub.add_row(Text(c.get('prompt', ''), style=PALETTE['muted']))
+
             sub.add_row(Text("Answer:", style=f"bold {PALETTE['primary']}"))
             sub.add_row(ans_render)
-            sub.add_row(Text("Description:", style=f"bold {PALETTE['primary']}"))
-            sub.add_row(Text(description, style=PALETTE['muted']))
-            sub.add_row(Text("Expected:", style=f"bold {PALETTE['primary']}"))
-            sub.add_row(Text(expected, style=PALETTE['muted']))
+
+            # Parsed tool if present
+            parsed_tool = c.get('parsed_tool')
+            if parsed_tool:
+                try:
+                    parsed_json = json.dumps(parsed_tool, indent=2)
+                    sub.add_row(Text("Parsed tool:", style=f"bold {PALETTE['primary']}"))
+                    sub.add_row(Syntax(parsed_json, "json", theme="monokai", line_numbers=False))
+                except Exception:
+                    sub.add_row(Text("Parsed tool:", style=f"bold {PALETTE['primary']}"))
+                    sub.add_row(Text(str(parsed_tool), style=PALETTE['muted']))
+
+            sub.add_row(Text("Intent:", style=f"bold {PALETTE['primary']}"))
+            sub.add_row(Text(c.get('intent', ''), style=PALETTE['muted']))
+
             sub.add_row(Text("Result:", style=f"bold {PALETTE['primary']}"))
             sub.add_row(Text(result_text, style=result_style))
 
-            # Color code border for missing required model calls
-            border = PALETTE['accent1'] if result_text != "MISSING" else "red"
-            card_panel = Panel(sub, title=card_title, border_style=border, expand=True, box=box.ROUNDED)
+            # Title includes index and shortcut info
+            short_title = f"{display_index}. {measurement}"
+            badge = Text(f" {result_text} ", style=result_style)
+            card_panel = Panel(sub, title=short_title, subtitle=badge, border_style=("red" if result_text == "MISSING" else PALETTE['accent1']), expand=True, box=box.ROUNDED)
             console.print(card_panel)
 
+            display_index += 1
+
+        # Summary: how many tests vs cards
         # Summary: how many tests vs cards
         total = len(collected_tests)
         with_cards = len([c for c in cards_sorted if c.get('answer') and c.get('answer') != '(no model call)'])
@@ -569,10 +643,8 @@ def render_report(output: str):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Run pytest and print a pretty report")
+    p = argparse.ArgumentParser(description="Run pytest and print a terminal-only report")
     p.add_argument("--no-run", action="store_true", help="Don't run pytest; read from stdin")
-    p.add_argument("--output-json", help="Write canonical report JSON to this path (optional)")
-    p.add_argument("--output-html", help="Write a lightweight HTML report to this path (optional)")
     args = p.parse_args()
 
     if args.no_run:
@@ -583,21 +655,6 @@ def main():
 
     render_report(output)
 
-    # If requested, export canonical report JSON by reusing the same structured events parsing
-    if args.output_json:
-        try:
-            from tests.reporting import parse_jsonl_events, build_cards_from_events, export_report_json
-
-            events_path = os.environ.get("TEST_MODEL_EVENTS_PATH") or os.path.join(os.getcwd(), "logs", "test_model_events.jsonl")
-            if os.path.exists(events_path):
-                by_test = parse_jsonl_events(events_path)
-                cards = build_cards_from_events(by_test)
-                export_report_json(cards, args.output_json)
-                console.print(f"[dim]Exported report JSON to {args.output_json}[/dim]")
-            else:
-                console.print(f"[yellow]No structured events found at {events_path}; nothing exported.[/yellow]")
-        except Exception as e:
-            console.print(f"[red]Failed to export report JSON: {e}[/red]")
 
 
 if __name__ == "__main__":
