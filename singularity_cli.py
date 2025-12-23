@@ -335,6 +335,7 @@ class SingularityAgent:
                 ) as resp:
                     if resp.status != 200:
                         text = await resp.text()
+                        # yield an error fragment for callers to display and stop
                         yield f"Error: Ollama returned HTTP {resp.status}: {text}"
                         return
 
@@ -352,6 +353,7 @@ class SingularityAgent:
 
                             msg = None
                             if isinstance(chunk, dict):
+                                # Ollama streaming may use different keys; inspect common fields
                                 if "message" in chunk and isinstance(chunk["message"], dict):
                                     msg = chunk["message"].get("content", "")
                                 elif "delta" in chunk and isinstance(chunk["delta"], dict):
@@ -359,6 +361,7 @@ class SingularityAgent:
                                 elif chunk.get("content"):
                                     msg = chunk.get("content")
                                 elif chunk.get("done"):
+                                    # end streaming
                                     break
 
                             if msg:
@@ -376,6 +379,80 @@ class SingularityAgent:
             if full_response:
                 self.conversation_history.append({"role": "user", "content": prompt})
                 self.conversation_history.append({"role": "assistant", "content": full_response})
+
+    @staticmethod
+    def _extract_json_object(text: str) -> str | None:
+        """Extract the first JSON object substring from text, handling nested braces."""
+        start = None
+        depth = 0
+        for i, ch in enumerate(text):
+            if ch == '{':
+                if start is None:
+                    start = i
+                depth += 1
+            elif ch == '}':
+                if depth > 0:
+                    depth -= 1
+                    if depth == 0 and start is not None:
+                        return text[start:i+1]
+        return None
+
+    async def process_with_tools(self, prompt: str, system: str | None = None) -> str:
+        """Send `prompt` to the model (streaming), detect a JSON tool call, execute it via MCP, and return final message.
+
+        - Streams content from `generate_streaming` and accumulates full response
+        - If the final response is a JSON object with a `tool` key, call the MCP tool via `call_mcp_tool`
+        - Returns the model response or an execution summary when a tool was invoked
+        """
+        full = ""
+        try:
+            async for chunk in self.generate_streaming(prompt, system=system):
+                if isinstance(chunk, str):
+                    full += chunk
+        except Exception as e:
+            raise RuntimeError(f"Error during streaming: {e}")
+
+        # Attempt to parse a tool call from the final response
+        body = full.strip()
+
+        # Extract JSON object substring if present
+        def _extract_json_object(text: str) -> str | None:
+            start = None
+            depth = 0
+            for i, ch in enumerate(text):
+                if ch == '{':
+                    if start is None:
+                        start = i
+                    depth += 1
+                elif ch == '}':
+                    if depth > 0:
+                        depth -= 1
+                        if depth == 0 and start is not None:
+                            return text[start:i+1]
+            return None
+
+        json_str = _extract_json_object(body) if body else None
+        if json_str:
+            try:
+                obj = json.loads(json_str)
+                tool_name = obj.get("tool")
+                tool_args = obj.get("args", {})
+                # Execute the tool via MCP
+                res = await self.call_mcp_tool(tool_name, tool_args)
+
+                # Append a system message with tool result to history
+                self.conversation_history.append({"role": "system", "content": f"Tool {tool_name} executed with result: {res}"})
+
+                if res.get("status") == "SUCCESS":
+                    return f"✓ Executed {tool_name}: {json.dumps(res.get('data', {}), indent=2)}"
+                else:
+                    return f"✗ Tool {tool_name} error: {res.get('error')}"
+            except json.JSONDecodeError:
+                # Not a valid JSON tool call — fall through to return the text
+                pass
+            except Exception as e:
+                raise RuntimeError(f"Error executing tool: {e}")
+
 
     async def execute_with_animation(self, prompt, status, system=None):
         """Async agent with minimal tool support.
