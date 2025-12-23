@@ -410,34 +410,6 @@ class SingularityAgent:
             )
 
 
-import argparse
-import asyncio
-import getpass
-import json
-import logging
-import os
-import shutil
-import subprocess
-import sys
-import time
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional
-
-import aiohttp
-
-try:
-    from rich.columns import Columns
-    from rich.console import Console
-    from rich.live import Live
-    from rich.markdown import Markdown
-    from rich.panel import Panel
-    from rich.prompt import Confirm, Prompt
-    from rich.table import Table
-except ImportError:
-    print("Installing required dependencies...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "rich"], check=True)
-    from rich.columns import Columns
     from rich.console import Console
     from rich.live import Live
     from rich.markdown import Markdown
