@@ -152,22 +152,115 @@ def call_ollama(prompt: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-def run_all(prompts: List[str]):
+def run_all(prompts: List[str], cli_mode: str = "code", timeout: int = 60, retries: int = 1):
+    """Run each prompt through the CLI in the specified `cli_mode` and capture outputs and structured events.
+
+    - Uses the project's `singularity_cli.py` to exercise real flows (mcp_server, tool execution).
+    - Writes a per-run TEST_MODEL_EVENTS_PATH (logs/test_model_events_prompt_<i>.jsonl) so the CLI records structured events.
+    """
     results = []
+
+    # Decide Python executable to run the CLI with (prefer venv)
+    py = ROOT / ".venv" / "bin" / "python"
+    if not py.exists():
+        py = Path(sys.executable)
+
+    cli_script = ROOT / "singularity_cli.py"
+    if not cli_script.exists():
+        raise FileNotFoundError("singularity_cli.py not found in repo root")
+
     for i, p in enumerate(prompts, start=1):
         ts = datetime.now(timezone.utc).isoformat()
         print(f"[{i}/{len(prompts)}] Prompt: {p[:80]}...")
         rec = {"i": i, "ts": ts, "prompt": p}
-        if USE_LIVE:
-            out = call_ollama(p)
-            rec.update(out)
-        else:
-            rec.update({"ok": False, "error": "RUN_LIVE_OLLAMA not enabled"})
-        # save incrementally
+
+        # Create a unique events path for this run so we can inspect structured events
+        events_path = ROOT / "logs" / f"test_model_events_prompt_{i}.jsonl"
+        try:
+            events_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+        env = os.environ.copy()
+        env["TEST_MODEL_EVENTS_PATH"] = str(events_path)
+        env["RUN_LIVE_OLLAMA"] = "1" if USE_LIVE else "0"
+
+        cmd = [str(py), str(cli_script), p, "-m", cli_mode, "--no-startup-config"]
+
+        attempt = 0
+        success = False
+        last_err = None
+        out_text = ""
+        err_text = ""
+        retcode = None
+        while attempt <= retries and not success:
+            attempt += 1
+            try:
+                pproc = __import__('subprocess').run(
+                    cmd,
+                    stdout=__import__('subprocess').PIPE,
+                    stderr=__import__('subprocess').PIPE,
+                    env=env,
+                    timeout=timeout,
+                    text=True,
+                )
+                out_text = (pproc.stdout or "").strip()
+                err_text = (pproc.stderr or "").strip()
+                retcode = pproc.returncode
+
+                # Read structured events if present
+                events = []
+                if events_path.exists():
+                    try:
+                        with open(events_path, "r", encoding="utf-8") as fh:
+                            for ln in fh:
+                                try:
+                                    events.append(json.loads(ln))
+                                except Exception:
+                                    continue
+                    except Exception:
+                        events = []
+
+                # Consider success if retcode == 0 and we have either assistant or parsed_tool events
+                has_model_events = any(e.get("event") in ("ASSISTANT", "PARSED_TOOL", "PROMPT") for e in events)
+                if retcode == 0 and (has_model_events or out_text):
+                    success = True
+                    rec.update({
+                        "ok": True,
+                        "returncode": retcode,
+                        "stdout": out_text,
+                        "stderr": err_text,
+                        "events": events,
+                    })
+                else:
+                    last_err = f"retcode={retcode}; has_model_events={has_model_events}"
+                    rec.update({
+                        "ok": False,
+                        "returncode": retcode,
+                        "stdout": out_text,
+                        "stderr": err_text,
+                        "events": events,
+                        "error": last_err,
+                    })
+
+            except __import__('subprocess').TimeoutExpired as e:
+                last_err = f"timeout after {timeout}s"
+                rec.update({"ok": False, "error": last_err, "stdout": e.stdout, "stderr": e.stderr})
+            except Exception as e:
+                last_err = str(e)
+                rec.update({"ok": False, "error": last_err})
+
+            if not success and attempt <= retries:
+                print(f"Attempt {attempt} failed: {last_err}. Retrying...")
+                time.sleep(1)
+
+        # Save incremental
         with open(OUT, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
         results.append(rec)
-        time.sleep(0.1)
+        # small pause to avoid overwhelming local services
+        time.sleep(0.2)
+
     return results
 
 
