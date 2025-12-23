@@ -67,7 +67,8 @@ ERROR_SYMBOL = "✗"
 
 class SingularityAgent:
     def __init__(self):
-        self.model = "Qwen2.5-Coder-14B"
+        # Default to a coder model available on local Ollama
+        self.model = os.environ.get("SINGULARITY_MODEL") or "qwen2.5-coder:14b-instruct-q4_K_M"
         self.conversation_history = []
         self.current_plan = None
         self.mcp_server_url = None
@@ -335,14 +336,16 @@ class SingularityAgent:
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "http://localhost:11434/api/chat",
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                ) as resp:
+                # Use OLLAMA base from env if provided (allows `/api/generate` fallback)
+                ollama_base = os.environ.get("OLLAMA_URL") or "http://localhost:11434"
+                chat_url = ollama_base.rstrip("/") + "/api/chat"
+                gen_url = ollama_base.rstrip("/") + "/api/generate"
+
+                async def _process_stream_response(resp):
+                    nonlocal full_response
                     if resp.status != 200:
                         text = await resp.text()
-                        # yield an error fragment for callers to display and stop
+                        # yield an error fragment for callers to display
                         yield f"Error: Ollama returned HTTP {resp.status}: {text}"
                         return
 
@@ -360,21 +363,54 @@ class SingularityAgent:
 
                             msg = None
                             if isinstance(chunk, dict):
-                                # Ollama streaming may use different keys; inspect common fields
+                                # Support multiple streaming schemas: chat-style and generate-style
                                 if "message" in chunk and isinstance(chunk["message"], dict):
                                     msg = chunk["message"].get("content", "")
                                 elif "delta" in chunk and isinstance(chunk["delta"], dict):
                                     msg = chunk["delta"].get("content", "")
                                 elif chunk.get("content"):
                                     msg = chunk.get("content")
+                                elif chunk.get("response"):
+                                    msg = chunk.get("response")
                                 elif chunk.get("done"):
                                     # end streaming
-                                    break
+                                    return
 
                             if msg:
                                 full_response += msg
                                 yield msg
 
+                # Try /api/chat first; on failure, fall back to /api/generate
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        try:
+                            async with session.post(
+                                chat_url,
+                                json=payload,
+                                timeout=aiohttp.ClientTimeout(total=timeout),
+                            ) as resp:
+                                async for chunk in _process_stream_response(resp):
+                                    yield chunk
+                                # if we produced content, stop here
+                                if full_response:
+                                    return
+                        except Exception:
+                            # try generate fallback below
+                            pass
+
+                        # /api/generate fallback
+                        gen_payload = {"model": self.model, "prompt": prompt, "max_tokens": 1024, "stream": True}
+                        async with session.post(
+                            gen_url,
+                            json=gen_payload,
+                            timeout=aiohttp.ClientTimeout(total=timeout),
+                        ) as resp:
+                            async for chunk in _process_stream_response(resp):
+                                yield chunk
+
+                except asyncio.TimeoutError as e:
+                    yield f"Error: Timeout while streaming: {e}"
+                    return
         except asyncio.TimeoutError as e:
             yield f"Error: Timeout while streaming: {e}"
             return
@@ -703,10 +739,27 @@ class SingularityAgent:
                 # Non-web canned responses
                 elif text.startswith("Generate code for:"):
                     task = text.split("Generate code for:", 1)[1].strip()
-                    reply = (
-                        f"Code generation requested for: {task}\n"
-                        "(Live model unavailable. Set RUN_LIVE_OLLAMA=1 to enable structured code output.)"
-                    )
+                    # If live Ollama is enabled, call the model (streaming) and process tool calls
+                    if os.environ.get("RUN_LIVE_OLLAMA") == "1":
+                        try:
+                            model_reply = await self.process_with_tools(text, system=system)
+                            if model_reply:
+                                reply = model_reply
+                            else:
+                                reply = (
+                                    f"Code generation requested for: {task}\n"
+                                    "(Live model enabled but returned empty response.)"
+                                )
+                        except Exception as e:
+                            reply = (
+                                f"Code generation requested for: {task}\n"
+                                f"(Live model error: {e})"
+                            )
+                    else:
+                        reply = (
+                            f"Code generation requested for: {task}\n"
+                            "(Live model unavailable. Set RUN_LIVE_OLLAMA=1 to enable structured code output.)"
+                        )
                 elif text.startswith("Create a detailed implementation plan for:"):
                     task = text.split("Create a detailed implementation plan for:", 1)[1].strip()
                     reply = (
