@@ -48,6 +48,14 @@ def check_pytest_fast():
     except Exception:
         pass
     cmd = f"{sys.executable} -m pytest -q -k 'not live and not slow'"
+    # Use pytest-xdist if available
+    try:
+        import pkgutil
+        if pkgutil.find_loader('xdist'):
+            cmd += ' -n auto'
+    except Exception:
+        pass
+
     # Run with TEST_MODEL_EVENTS_PATH set so tests will write structured events
     env = os.environ.copy()
     env["TEST_MODEL_EVENTS_PATH"] = str(events_path)

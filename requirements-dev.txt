@@ -1,4 +1,5 @@
 pytest
+pytest-xdist
 black
 isort
 flake8

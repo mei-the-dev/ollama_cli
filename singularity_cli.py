@@ -422,6 +422,25 @@ class AgentStep:
     completed: bool = False
 
 
+@dataclass
+class AgentStep:
+    step_number: int
+    content: str
+    tool_call: dict | None = None
+    tool_result: dict | None = None
+    completed: bool = False
+
+
+@dataclass
+class AgentLoopStep:
+    step_id: int
+    prompt: str
+    tool_calls: list = field(default_factory=list)
+    started_at: float = 0.0
+    response: str | None = None
+    completed: bool = False
+
+
 class SingularityAgent:
     def __init__(self):
         # Default to a coder model available on local Ollama
@@ -438,6 +457,7 @@ class SingularityAgent:
             self.context_manager = ContextManager()
         except Exception:
             self.context_manager = None
+
 
         # Agent loop controls
         self.max_steps = int(os.environ.get("SINGULARITY_MAX_STEPS", 3))
@@ -681,64 +701,12 @@ class SingularityAgent:
         `self.conversation_history` as an assistant message.
         """
 
-    async def run_multi_step(self, prompt: str, max_steps: int = 3, timeout_per_step: float = 60.0) -> List[AgentStep]:
-        """Run a simple multi-step loop.
-
-        Behavior:
-        - For up to `max_steps` iterations:
-          - Stream a response via `generate_streaming` for this step
-          - Parse any JSON tool calls in the final content
-          - Attempt to execute detected tool calls via `call_mcp_tool`
-          - Record an AgentStep with parsed information
-          - Stop early if no tool call was present (treat as completion)
-        """
-        steps: List[AgentStep] = []
-        for i in range(1, max_steps + 1):
-            full = ""
-            try:
-                async for chunk in self.generate_streaming(prompt, system=None, timeout=timeout_per_step):
-                    if isinstance(chunk, str):
-                        full += chunk
-            except Exception as e:
-                # On streaming error, record and break
-                steps.append(AgentStep(number=i, prompt=prompt, content=str(e), complete=False))
-                break
-
-            # Parse for a JSON tool call
-            obj_str = self._extract_json_object(full) if full else None
-            tool_calls = []
-            executed = []
-            if obj_str:
-                try:
-                    parsed = json.loads(obj_str)
-                    tname = parsed.get("tool") or parsed.get("function_name") or parsed.get("action") or parsed.get("tool_name")
-                    targs = parsed.get("args", {}) or parsed.get("arguments", {}) or parsed.get("params", {}) or {}
-                    tool_calls.append({"tool": tname, "args": targs, "raw": parsed})
-
-                    # Try executing the tool (best-effort)
-                    try:
-                        res = await self.call_mcp_tool(tname, targs)
-                        executed.append({"tool": tname, "result": res})
-                    except Exception as e:
-                        executed.append({"tool": tname, "result": {"status": "ERROR", "error": str(e)}})
-                except Exception:
-                    # malformed JSON or parse error - ignore tool execution
-                    pass
-
-            step_complete = obj_str is None
-            steps.append(AgentStep(number=i, prompt=prompt, content=full, tool_calls=tool_calls, executed_tools=executed, complete=step_complete))
-
-            # If there were no tool calls, we consider the run complete
-            if not tool_calls:
-                break
-
-        return steps
+        # Prefer using ModelManager when available to benefit from concurrency control and GPU checks
         try:
-            import aiohttp
+            from model_manager import get_default_manager
+            mgr = get_default_manager()
         except Exception:
-            console.print("[yellow]Installing 'aiohttp' for streaming...[/yellow]")
-            subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"], check=True)
-            import aiohttp
+            mgr = None
 
         # Log the prompt (include pytest test name if available for diagnostics)
         try:
@@ -746,6 +714,27 @@ class SingularityAgent:
             logger.info(f"PROMPT [{pytest_test}]: {prompt}")
         except Exception:
             pass
+
+        # If a ModelManager is available, use it for streaming (it yields strings)
+        if mgr is not None:
+            try:
+                full_response = ""
+                async for chunk in mgr.stream(self.model, prompt, system=system, timeout=timeout):
+                    # accumulate for final message
+                    full_response += chunk
+                    yield chunk
+                return
+            except Exception as e:
+                # Fall back to direct HTTP streaming if manager fails
+                logger.warning(f"ModelManager stream failed, falling back to direct streaming: {e}")
+
+        # Fallback: direct http streaming (previous behavior)
+        try:
+            import aiohttp
+        except Exception:
+            console.print("[yellow]Installing 'aiohttp' for streaming...[/yellow]")
+            subprocess.run([sys.executable, "-m", "pip", "install", "aiohttp"], check=True)
+            import aiohttp
 
         messages = self.conversation_history.copy()
         if system:
@@ -877,6 +866,70 @@ class SingularityAgent:
                 except Exception:
                     pass
 
+    async def run_multi_step(self, prompt: str, max_steps: int = 3, system: str | None = None) -> list:
+        """Run the agent in a multi-step loop.
+        """
+        steps: list[AgentStep] = []
+        for step_no in range(1, max_steps + 1):
+            # Basic defensive step record (kept for debugging)
+            try:
+                started = time.time()
+            except Exception:
+                started = 0.0
+            full = ""
+            try:
+                async for chunk in self.generate_streaming(prompt, system=system, timeout=120.0):
+                    if isinstance(chunk, str):
+                        full += chunk
+            except Exception as e:
+                # If streaming itself fails, record and stop
+                steps.append(AgentStep(step_number=step_no, content=f"Error during streaming: {e}", completed=True))
+                break
+
+            if not full:
+                break
+
+            step = AgentStep(step_number=step_no, content=full)
+
+            # Check for embedded JSON tool call
+            try:
+                json_str = self._extract_json_object(full) if full else None
+                if json_str:
+                    try:
+                        obj = json.loads(json_str)
+                        tool_name = obj.get("tool") or obj.get("function_name") or obj.get("action") or obj.get("tool_name")
+                        tool_args = obj.get("args", {}) or obj.get("arguments", {}) or obj.get("params", {})
+                        if tool_name:
+                            step.tool_call = {"tool": tool_name, "args": tool_args, "raw": obj}
+
+                            # Execute the tool via MCP
+                            try:
+                                res = await self.call_mcp_tool(tool_name, tool_args)
+                                step.tool_result = res
+                                # Append system history message summarizing execution
+                                self.conversation_history.append({"role": "system", "content": f"Tool {tool_name} executed with result: {res}"})
+                            except Exception as e:
+                                step.tool_result = {"status": "ERROR", "error": str(e)}
+
+                    except Exception:
+                        # Not valid JSON or parsing failed — continue
+                        pass
+            except Exception:
+                pass
+
+            # Check completion markers in content
+            if "TASK_COMPLETE" in full or "TASK COMPLETE" in full or (step.tool_result and step.tool_result.get("status") == "SUCCESS"):
+                step.completed = True
+
+            steps.append(step)
+
+            if step.completed:
+                break
+
+        # Store steps on agent for testability and to avoid 'return value in async generator' SyntaxError
+        self.last_multi_steps = steps
+        return
+
     @staticmethod
     def _extract_json_object(text: str) -> str | None:
         """Extract the first JSON object substring from text, handling nested braces."""
@@ -935,7 +988,11 @@ class SingularityAgent:
 
         full = ""
         try:
-            async for chunk in self.generate_streaming(prompt, system=system):
+            # Use shared ModelManager to avoid re-creating sessions and to limit concurrency
+            from model_manager import get_default_manager
+
+            manager = get_default_manager()
+            async for chunk in manager.stream(self.model, prompt, system=system, timeout=120.0):
                 if isinstance(chunk, str):
                     full += chunk
         except Exception as e:
@@ -975,12 +1032,10 @@ class SingularityAgent:
         max_steps = max_steps or self.max_steps
         steps = []
         for i in range(max_steps):
-            step = AgentStep(step_id=i, prompt=prompt, tool_calls=[], started_at=time.time())
+            step = AgentLoopStep(step_id=i, prompt=prompt, tool_calls=[], started_at=time.time())
             try:
                 res = await self.process_with_tools(prompt, system=system, execute_tools=True)
                 step.response = res if isinstance(res, str) else str(res)
-                step.finished_at = time.time()
-
                 # Simple heuristic: if the response indicates a tool execution or contains 'Executed', continue
                 if isinstance(res, str) and (res.startswith("✓ Executed") or "Executed" in res):
                     self.metrics["tool_calls"] += 1
@@ -994,7 +1049,6 @@ class SingularityAgent:
                     self.metrics["total_steps"] += 1
                     break
             except Exception as e:
-                step.finished_at = time.time()
                 step.response = f"Error: {e}"
                 step.completed = True
                 steps.append(step)
