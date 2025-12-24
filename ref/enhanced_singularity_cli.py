@@ -817,11 +817,16 @@ Available tools: write_code, read_code, execute_code, git_operation"""
             if args:
                 self.permissions.add_allowed(args)
                 console.print(f"[green]✓[/green] Added to allowed: {args}")
-        
+
         elif command == "/ask":
             if args:
                 self.permissions.add_ask(args)
                 console.print(f"[green]✓[/green] Will ask for: {args}")
+
+        elif command == "/block":
+            if args:
+                self.permissions.add_block(args)
+                console.print(f"[green]✓[/green] Blocked: {args}")
         
         elif command == "/config":
             config = {

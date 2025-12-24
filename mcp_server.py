@@ -111,6 +111,44 @@ class MCPServer:
             "recent_requests": deque(maxlen=1000),
         }
 
+        # Register available tools into the central tools registry (if present)
+        try:
+            import tools as tools_mod
+
+            registration_map = {
+                # Register common aliases to the implemented methods (legacy names vary across versions)
+                "read_file": ("read_code", tools_mod.ToolCategory.READ, "Read code/file with encoding detection and parsing"),
+                "read_code": ("read_code", tools_mod.ToolCategory.READ, "Read code/file with encoding detection and parsing"),
+                "write_file": ("write_code", tools_mod.ToolCategory.WRITE, "Write file with backup and optional auto-format"),
+                "write_code": ("write_code", tools_mod.ToolCategory.WRITE, "Write file with backup and optional auto-format"),
+                "apply_diff": ("apply_diff", tools_mod.ToolCategory.WRITE, "Apply diff preview and patch"),
+                "execute_bash": ("execute_code", tools_mod.ToolCategory.EXECUTE, "Execute code/command with timeout and streaming"),
+                "execute_code": ("execute_code", tools_mod.ToolCategory.EXECUTE, "Execute code/command with timeout and streaming"),
+                "search_codebase": ("search_docs", tools_mod.ToolCategory.READ, "Smart codebase search"),
+                "search_docs": ("search_docs", tools_mod.ToolCategory.READ, "Smart codebase search"),
+                "analyze_file": ("read_code", tools_mod.ToolCategory.READ, "Analyze file with AST metrics (alias to read_code)"),
+                "git_operation": ("git_operation", tools_mod.ToolCategory.EXECUTE, "Perform git operations"),
+            }
+
+            for public_name, (method_name, category, desc) in registration_map.items():
+                handler = getattr(self, method_name, None)
+                if handler:
+                    try:
+                        tools_mod._registry[public_name] = tools_mod.Tool(
+                            name=public_name,
+                            description=desc,
+                            category=category,
+                            default_permission=("always_allow" if category == tools_mod.ToolCategory.READ else "ask"),
+                            schema={},
+                            handler=handler,
+                        )
+                    except Exception:
+                        # Best-effort registration; don't fail initialization
+                        pass
+        except Exception:
+            # tools module not available — skip registration
+            pass
+
     async def http_handler(self, request):
         """HTTP POST /call -> JSON {"name":..., "arguments":{...}}"""
         start = time.time()
@@ -140,17 +178,23 @@ class MCPServer:
                 result = await result
             elapsed_ms = (time.time() - start) * 1000.0
             self._record_telemetry(elapsed_ms)
-            if isinstance(result, ToolResult):
-                return aiohttp.web.json_response(
-                    {
-                        "status": result.status.value,
-                        "data": result.data,
-                        "error": result.error,
-                        "warnings": result.warnings,
-                        "metadata": result.metadata,
-                    }
-                )
-            return aiohttp.web.json_response(result)
+            # Normalize to ToolResult for consistent responses
+            if not isinstance(result, ToolResult):
+                try:
+                    result = ToolResult(status=ToolStatus.SUCCESS, data=result)
+                except Exception:
+                    # Fallback to generic success wrapper
+                    result = ToolResult(status=ToolStatus.SUCCESS, data={"result": result})
+
+            return aiohttp.web.json_response(
+                {
+                    "status": result.status.value,
+                    "data": result.data,
+                    "error": result.error,
+                    "warnings": result.warnings,
+                    "metadata": result.metadata,
+                }
+            )
         except Exception as e:
             elapsed_ms = (time.time() - start) * 1000.0
             self._record_telemetry(elapsed_ms)
