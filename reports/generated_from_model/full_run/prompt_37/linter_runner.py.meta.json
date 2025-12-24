@@ -1,0 +1,5 @@
+{
+  "prompt_i": 37,
+  "orig_filepath": "/path/to/linter_runner.py",
+  "dest": "reports/generated_from_model/full_run/prompt_37/linter_runner.py"
+}

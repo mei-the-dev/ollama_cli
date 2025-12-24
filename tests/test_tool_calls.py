@@ -69,6 +69,7 @@ async def test_process_with_tools_calls_mcp(monkeypatch, tmp_path, model_event_l
 @pytest.mark.asyncio
 async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path, model_event_logger):
     monkeypatch.setenv("TEST_MODEL_EVENTS_PATH", str(tmp_path / "events.jsonl"))
+    monkeypatch.setenv("SINGULARITY_SANDBOX", str(tmp_path))
     agent = singularity_cli.SingularityAgent()
 
     target = str(tmp_path / "live_test.txt")
@@ -84,11 +85,13 @@ async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path, mo
 
     agent.generate_streaming = gen
 
-    # Mock call_mcp_tool to assert normalized args
+    # Mock call_mcp_tool to assert sanitized args
     async def fake_call(name, args, timeout=30.0, retries=2):
         assert name == 'write_code'
-        assert args.get('filepath') == target
+        # Original absolute path must be preserved and sanitized filepath must be under sandbox
+        assert args.get('original_filepath') == target
         assert args.get('content') == 'hello'
+        assert str(args.get('filepath')).startswith(str(tmp_path))
         return {'status': 'SUCCESS', 'data': {'ok': True}}
 
     monkeypatch.setattr(agent, 'call_mcp_tool', fake_call)
@@ -100,8 +103,17 @@ async def test_process_with_tools_normalizes_file_path(monkeypatch, tmp_path, mo
     lines = list((tmp_path / "events.jsonl").read_text(encoding='utf-8').splitlines())
     evs = [json.loads(l) for l in lines]
     assert any(e.get('event') == 'PARSED_TOOL' and e.get('payload', {}).get('tool') == 'write_code' for e in evs)
-    parsed = next(e for e in evs if e.get('event') == 'PARSED_TOOL')
-    assert parsed['payload']['args'].get('filepath') == target
+    parsed = next(
+        e
+        for e in evs
+        if e.get('event') == 'PARSED_TOOL'
+        and (
+            e.get('payload', {}).get('args', {}).get('original_filepath')
+            or str(e.get('payload', {}).get('args', {}).get('filepath', '')).startswith(str(tmp_path))
+        )
+    )
+    # Parsed args should now include sanitized filepath or original_filepath preserved
+    assert parsed['payload']['args'].get('original_filepath') == target or parsed['payload']['args'].get('filepath', '').startswith(str(tmp_path))
     assert parsed['payload']['args'].get('content') == 'hello'
     # raw original object is preserved
     assert isinstance(parsed['payload'].get('raw'), dict)

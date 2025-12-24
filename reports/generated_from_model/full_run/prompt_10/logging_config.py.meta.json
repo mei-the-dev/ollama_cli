@@ -1,0 +1,5 @@
+{
+  "prompt_i": 10,
+  "orig_filepath": "/path/to/logging_config.py",
+  "dest": "reports/generated_from_model/full_run/prompt_10/logging_config.py"
+}

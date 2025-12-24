@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+
 def atomic_write(path, content):
     """
     Writes content to a file atomically by first writing to a temporary file and then renaming it.
@@ -10,13 +11,13 @@ def atomic_write(path, content):
         content (str): The content to write to the file.
     """
     import os
-    import tempfile
     import shutil
+    import tempfile
 
     # Create a temporary file in the same directory as the target file
     temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path))
     try:
-        with os.fdopen(temp_fd, 'w') as f:
+        with os.fdopen(temp_fd, "w") as f:
             f.write(content)
         # Atomically replace the target file with the temporary file
         shutil.move(temp_path, path)

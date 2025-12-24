@@ -1,0 +1,5 @@
+{
+  "prompt_i": 7,
+  "orig_filepath": "/path/to/virtualenv_detector.py",
+  "dest": "reports/generated_from_model/full_run/prompt_7/virtualenv_detector.py"
+}

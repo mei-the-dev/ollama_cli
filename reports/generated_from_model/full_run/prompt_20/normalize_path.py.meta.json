@@ -1,0 +1,5 @@
+{
+  "prompt_i": 20,
+  "orig_filepath": "/path/to/normalize_path.py",
+  "dest": "reports/generated_from_model/full_run/prompt_20/normalize_path.py"
+}

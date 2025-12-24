@@ -1,0 +1,5 @@
+{
+  "prompt_i": 32,
+  "orig_filepath": "/path/to/create_venv.sh",
+  "dest": "reports/generated_from_model/full_run/prompt_32/create_venv.sh"
+}

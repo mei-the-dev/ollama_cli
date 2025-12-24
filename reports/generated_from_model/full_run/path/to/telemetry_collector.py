@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-import psutil
-import time
 import json
+import time
+
+import psutil
+
 
 def collect_metrics(command):
     # Start the process and record start time
@@ -10,12 +12,12 @@ def collect_metrics(command):
 
     # Initialize metrics dictionary
     metrics = {
-        'command': command,
-        'start_time': start_time,
-        'end_time': None,
-        'runtime': None,
-        'memory_usage': [],
-        'cpu_usage': []
+        "command": command,
+        "start_time": start_time,
+        "end_time": None,
+        "runtime": None,
+        "memory_usage": [],
+        "cpu_usage": [],
     }
 
     try:
@@ -24,31 +26,32 @@ def collect_metrics(command):
             memory_info = process.memory_info()
             cpu_percent = process.cpu_percent(interval=1)
 
-            metrics['memory_usage'].append({
-                'timestamp': time.time(),
-                'rss': memory_info.rss,  # Resident Set Size
-                'vms': memory_info.vms   # Virtual Memory Size
-            })
+            metrics["memory_usage"].append(
+                {
+                    "timestamp": time.time(),
+                    "rss": memory_info.rss,  # Resident Set Size
+                    "vms": memory_info.vms,  # Virtual Memory Size
+                }
+            )
 
-            metrics['cpu_usage'].append({
-                'timestamp': time.time(),
-                'percent': cpu_percent
-            })
+            metrics["cpu_usage"].append({"timestamp": time.time(), "percent": cpu_percent})
     except Exception as e:
-        print(f'Error collecting metrics: {e}')
+        print(f"Error collecting metrics: {e}")
 
     # Record end time and runtime
-    metrics['end_time'] = time.time()
-    metrics['runtime'] = metrics['end_time'] - start_time
+    metrics["end_time"] = time.time()
+    metrics["runtime"] = metrics["end_time"] - start_time
 
     return metrics
 
+
 def write_metrics_to_json(metrics, output_file):
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         json.dump(metrics, f, indent=4)
 
-if __name__ == '__main__':
-    command = 'your_command_here'  # Replace with the actual command to run
+
+if __name__ == "__main__":
+    command = "your_command_here"  # Replace with the actual command to run
     metrics = collect_metrics(command)
-    output_file = '/path/to/output.json'
+    output_file = "/path/to/output.json"
     write_metrics_to_json(metrics, output_file)

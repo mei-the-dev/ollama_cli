@@ -1,7 +1,9 @@
 # config_validator.py
 
-from pydantic import BaseModel, ValidationError, Field
 import json
+
+from pydantic import BaseModel, Field, ValidationError
+
 
 class ConfigSchema(BaseModel):
     # Define your configuration schema here
@@ -20,13 +22,10 @@ class ConfigSchema(BaseModel):
             error_messages = [f"{err['loc'][0]}: {err['msg']}" for err in e.errors()]
             raise ValueError("Configuration validation failed. Errors:\n" + "\n".join(error_messages))
 
+
 if __name__ == "__main__":
     # Example usage
-    config_data = {
-        "api_key": "your_api_key_here",
-        "timeout": 20,
-        "retries": 5
-    }
+    config_data = {"api_key": "your_api_key_here", "timeout": 20, "retries": 5}
 
     try:
         validated_config = ConfigSchema.validate_config(config_data)

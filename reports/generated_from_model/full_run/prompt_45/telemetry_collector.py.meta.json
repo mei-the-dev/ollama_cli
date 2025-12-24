@@ -1,0 +1,5 @@
+{
+  "prompt_i": 45,
+  "orig_filepath": "/path/to/telemetry_collector.py",
+  "dest": "reports/generated_from_model/full_run/prompt_45/telemetry_collector.py"
+}

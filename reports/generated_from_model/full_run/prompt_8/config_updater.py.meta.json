@@ -1,0 +1,5 @@
+{
+  "prompt_i": 8,
+  "orig_filepath": "/path/to/config_updater.py",
+  "dest": "reports/generated_from_model/full_run/prompt_8/config_updater.py"
+}

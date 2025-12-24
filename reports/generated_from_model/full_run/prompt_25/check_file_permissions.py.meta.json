@@ -1,0 +1,5 @@
+{
+  "prompt_i": 25,
+  "orig_filepath": "/path/to/check_file_permissions.py",
+  "dest": "reports/generated_from_model/full_run/prompt_25/check_file_permissions.py"
+}

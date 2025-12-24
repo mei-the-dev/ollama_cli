@@ -1,0 +1,5 @@
+{
+  "prompt_i": 5,
+  "orig_filepath": "/path/to/atomic_write.py",
+  "dest": "reports/generated_from_model/full_run/prompt_5/atomic_write.py"
+}

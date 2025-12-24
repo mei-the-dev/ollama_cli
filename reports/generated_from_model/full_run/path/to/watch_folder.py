@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import time
-from watchdog.observers import Observer
+
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
 
 class ChangeHandler(FileSystemEventHandler):
     def __init__(self, callback):
@@ -18,6 +20,7 @@ class ChangeHandler(FileSystemEventHandler):
         if not event.is_directory:
             self.callback(event.src_path)
 
+
 def watch_folder(path, callback):
     event_handler = ChangeHandler(callback)
     observer = Observer()
@@ -30,8 +33,10 @@ def watch_folder(path, callback):
         observer.stop()
     observer.join()
 
-if __name__ == '__main__':
-    def my_callback(file_path):
-        print(f'File changed: {file_path}')
 
-    watch_folder('/path/to/watch', my_callback)
+if __name__ == "__main__":
+
+    def my_callback(file_path):
+        print(f"File changed: {file_path}")
+
+    watch_folder("/path/to/watch", my_callback)

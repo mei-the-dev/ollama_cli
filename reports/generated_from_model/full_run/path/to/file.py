@@ -1,5 +1,6 @@
 # Function to read the contents of a file
 
+
 def read_file(path):
     """
     Reads and returns the contents of a file.
@@ -15,9 +16,9 @@ def read_file(path):
         IOError: If an error occurs while reading the file.
     """
     try:
-        with open(path, 'r', encoding='utf-8') as file:
+        with open(path, "r", encoding="utf-8") as file:
             return file.read()
     except FileNotFoundError:
-        raise FileNotFoundError(f'The file {path} does not exist.')
+        raise FileNotFoundError(f"The file {path} does not exist.")
     except IOError as e:
-        raise IOError(f'An error occurred while reading the file: {e}')
+        raise IOError(f"An error occurred while reading the file: {e}")
